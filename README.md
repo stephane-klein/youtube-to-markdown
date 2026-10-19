@@ -336,9 +336,17 @@ only the last 20 events on screen, so it stays bounded even with a large feed.
 Retryable API errors (HTTP 408, 409, 429 or >= 500) are retried with growing
 delays — 10 s, 30 s, 60 s by default, configurable with `--retry-delays`
 (comma-separated seconds, or `YT_TO_MD_RETRY_DELAYS`). A `Retry-After` header
-from the server is honored when longer than the schedule. Each retry is shown in
-the phase output; after the last attempt the file is reported as an error and is
-retried on the next run.
+from the server is honored when longer than the schedule. Each retry line shows
+the reason reported by the API (status and response body), for example:
+
+```
+retrying in 30s (attempt 3/4) HTTP 429 rate limited  david-cayla/....fr.md
+```
+
+After the last attempt the file is reported as an error and is retried on the
+next run. At the end of the run, a `failures:` block lists each failed file with
+its reason, so the cause stays visible even after the phase output has scrolled.
+The command exits with a non-zero status when at least one file failed.
 
 ### Reasoning effort
 

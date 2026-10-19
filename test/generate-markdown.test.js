@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { APICallError } from "ai";
 import {
   budgetForPart,
   chunkPrompt,
   cleanBody,
   createLimiter,
   DEFAULT_REASONING,
+  describeCause,
+  describeError,
   estimateCost,
   metricsLine,
   plannedBudget,
@@ -152,4 +155,40 @@ test("metricsLine reports reasoning tokens when present", () => {
   const line = metricsLine("model", usage(100, 50, 0, 10), 1.25, 0.001);
   assert.match(line, /10 reasoning/);
   assert.match(line, /llm 1\.3s/);
+});
+
+const apiError = ({ status, body, message = "request failed" }) =>
+  new APICallError({
+    message,
+    url: "https://api.example.com/chat/completions",
+    requestBodyValues: {},
+    statusCode: status,
+    responseBody: body,
+  });
+
+test("describeCause formats a plain error", () => {
+  assert.equal(describeCause(new Error("boom")), "boom");
+});
+
+test("describeCause reports the status and a compact body", () => {
+  const error = apiError({
+    status: 429,
+    body: "  too   many\nrequests ",
+    message: "rate limited",
+  });
+  assert.equal(describeCause(error), "HTTP 429 rate limited: too many requests");
+});
+
+test("describeCause truncates a long response body", () => {
+  const error = apiError({ status: 500, body: "x".repeat(300) });
+  assert.equal(describeCause(error).endsWith("x".repeat(200)), true);
+  assert.equal(describeCause(error).includes("x".repeat(201)), false);
+});
+
+test("describeError appends the attempt count", () => {
+  const error = apiError({ status: 503, body: "", message: "unavailable" });
+  assert.equal(
+    describeError(error, 4),
+    "HTTP 503 unavailable after 4 attempt(s)",
+  );
 });

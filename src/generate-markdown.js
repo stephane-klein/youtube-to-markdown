@@ -210,13 +210,16 @@ function retryDelayMs(error, fallbackMs) {
   return Math.max(headerMs, fallbackMs);
 }
 
-export function describeError(error, attempts) {
-  const suffix = ` after ${attempts} attempt(s)`;
-  if (!APICallError.isInstance(error)) return `${error.message}${suffix}`;
+export function describeCause(error) {
+  if (!APICallError.isInstance(error)) return `${error.message}`;
 
   const status = error.statusCode ? `HTTP ${error.statusCode}` : "API error";
   const body = error.responseBody?.trim().replace(/\s+/g, " ").slice(0, 200);
-  return `${status} ${error.message}${suffix}${body ? `: ${body}` : ""}`;
+  return `${status} ${error.message}${body ? `: ${body}` : ""}`;
+}
+
+export function describeError(error, attempts) {
+  return `${describeCause(error)} after ${attempts} attempt(s)`;
 }
 
 function parseRetryDelays(value) {
@@ -328,7 +331,7 @@ async function generateOnce(
         throw new Error(describeError(error, attempt), { cause: error });
       }
       const waitMs = retryDelayMs(error, retryDelays[attempt - 1]);
-      onRetry?.(attempt + 1, totalAttempts, waitMs);
+      onRetry?.(attempt + 1, totalAttempts, waitMs, error);
       await delay(waitMs);
     }
   }
@@ -578,6 +581,7 @@ export async function runGenerateMarkdown({
     already: 0,
     skipped: 0,
     errors: 0,
+    failures: [],
     totalSeconds: 0,
     totalInput: 0,
     totalOutput: 0,
@@ -715,9 +719,10 @@ export async function runGenerateMarkdown({
               },
               job.title,
               transcript,
-              (nextAttempt, totalAttempts, waitMs) => {
+              (nextAttempt, totalAttempts, waitMs, error) => {
                 task.output = `retrying in ${Math.round(waitMs / 1000)}s ` +
-                  `(attempt ${nextAttempt}/${totalAttempts})  ${name}`;
+                  `(attempt ${nextAttempt}/${totalAttempts}) ` +
+                  `${describeCause(error)}  ${name}`;
               },
               (part, totalParts) => {
                 if (totalParts > 1) {
@@ -735,6 +740,10 @@ export async function runGenerateMarkdown({
 
           if (finishReason !== "stop") {
             stats.errors++;
+            stats.failures.push({
+              name,
+              reason: `finishReason=${finishReason}`,
+            });
             task.output = `error (finishReason=${finishReason})  ${name}`;
             return;
           }
@@ -757,6 +766,7 @@ export async function runGenerateMarkdown({
           task.output = `generated  ${name}  ${metrics}`;
         } catch (error) {
           stats.errors++;
+          stats.failures.push({ name, reason: error.message });
           task.output = `error (${error.message})  ${name}`;
         } finally {
           const upToDate = stats.already + stats.generated;
@@ -782,6 +792,15 @@ export async function runGenerateMarkdown({
       stats.costKnown ? `, ~$${stats.totalCost.toFixed(6)}` : ""
     }`,
   );
+
+  if (stats.failures.length > 0) {
+    console.error("\nfailures:");
+    for (const failure of stats.failures) {
+      console.error(`  - ${failure.name}: ${failure.reason}`);
+    }
+  }
+
+  if (stats.errors > 0) process.exitCode = 1;
 }
 
 export {
