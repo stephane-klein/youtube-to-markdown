@@ -348,6 +348,21 @@ next run. At the end of the run, a `failures:` block lists each failed file with
 its reason, so the cause stays visible even after the phase output has scrolled.
 The command exits with a non-zero status when at least one file failed.
 
+### Empty output
+
+A model can finish with `finish_reason: stop` but return no text at all, for
+example when it spends its whole response on internal reasoning. Such a
+generation is reported as an error and no file is written:
+
+```
+error (empty output: part 1/1, finish=stop, text_tokens=1, reasoning_tokens=4001)  ....fr.md
+```
+
+The `failures:` block repeats the reason at the end of the run. Add
+`--debug-llm` (or `YT_TO_MD_DEBUG_LLM=1`) to log the request's `max_tokens` and
+`reasoning_effort`, plus the size of the provider's `content` and
+`reasoning_content`, which helps diagnose provider-side empty answers.
+
 ### Reasoning effort
 
 The command asks the model for a reasoning effort of `low` by default. Set
@@ -382,7 +397,8 @@ LLM call that rewrites the beginning of the next section so it flows from the
 previous one. `--chunk-target-tokens` (or `YT_TO_MD_CHUNK_TARGET_TOKENS`,
 default 8000) sets the target input size of each chunk. The generation of a
 chunk is guaranteed to stop with `stop`; otherwise the file is reported as an
-error and nothing is written. The frontmatter records how many chunks were used.
+error and nothing is written. The same happens when a part comes back with an
+empty body. The frontmatter records how many chunks were used.
 
 ### Generated frontmatter
 
@@ -404,6 +420,7 @@ llm:
   text_tokens: 3262
   estimated_cost_usd: 0.000927
   finish_reason: stop
+  raw_finish_reason: stop
   pricing:
     source: models.dev
     peak: null

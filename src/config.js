@@ -38,6 +38,7 @@ const ENV = {
   maxOutputTokens: "YT_TO_MD_MAX_OUTPUT_TOKENS",
   chunkTargetTokens: "YT_TO_MD_CHUNK_TARGET_TOKENS",
   reasoning: "YT_TO_MD_REASONING",
+  debugLlm: "YT_TO_MD_DEBUG_LLM",
 };
 
 export function loadEnv(env = process.env) {

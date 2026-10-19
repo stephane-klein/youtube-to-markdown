@@ -103,7 +103,19 @@ function metricsLine(modelId, usage, elapsed, cost) {
     .join("  ");
 }
 
-function frontmatter(job, { modelId, usage, elapsed, cost, finishReason, price, chunks }) {
+function frontmatter(
+  job,
+  {
+    modelId,
+    usage,
+    elapsed,
+    cost,
+    finishReason,
+    rawFinishReason,
+    price,
+    chunks,
+  },
+) {
   const data = {
     source_url: job.url,
     video_title: titleForLang(job.titles, job.lang),
@@ -119,11 +131,32 @@ function frontmatter(job, { modelId, usage, elapsed, cost, finishReason, price, 
       text_tokens: usage?.outputTokenDetails?.textTokens ?? null,
       estimated_cost_usd: cost === null ? null : Number(cost.toFixed(6)),
       finish_reason: finishReason,
+      raw_finish_reason: rawFinishReason ?? null,
       pricing: price ? { source: price.source, peak: price.peak } : null,
     },
   };
 
   return `---\n${stringify(data, { lineWidth: 0 }).trimEnd()}\n---\n\n`;
+}
+
+export function emptyOutputReason({
+  emptyParts,
+  chunks,
+  finishReason,
+  rawFinishReason,
+  usage,
+}) {
+  const raw =
+    rawFinishReason && rawFinishReason !== finishReason
+      ? `/${rawFinishReason}`
+      : "";
+  const text = usage?.outputTokenDetails?.textTokens ?? null;
+  const reasoning = usage?.outputTokenDetails?.reasoningTokens ?? null;
+  return (
+    `empty output: part ${emptyParts.join(",")}/${chunks}, ` +
+    `finish=${finishReason}${raw}, text_tokens=${text}, ` +
+    `reasoning_tokens=${reasoning}`
+  );
 }
 
 const isHeading = (text) => /^#{1,6}\s/.test(text);
@@ -279,6 +312,31 @@ export function reasoningOptions(reasoning, endpoint = "") {
   return reasoning ? { reasoning } : {};
 }
 
+function logLlmDebug({
+  maxOutputTokens,
+  reasoning,
+  finishReason,
+  rawFinishReason,
+  text,
+  reasoningText,
+  warnings,
+}) {
+  console.error(
+    `llm debug: max_tokens=${maxOutputTokens ?? "-"} ` +
+      `reasoning=${reasoning ?? "provider-default"} ` +
+      `finish=${finishReason} raw=${rawFinishReason ?? "-"} ` +
+      `text_chars=${text?.length ?? 0} ` +
+      `reasoning_chars=${reasoningText?.length ?? 0}`,
+  );
+  if (warnings?.length) {
+    console.error(`llm debug: warnings=${JSON.stringify(warnings)}`);
+  }
+  if (!`${text ?? ""}`.trim() && reasoningText) {
+    const preview = reasoningText.replace(/\s+/g, " ").slice(0, 300);
+    console.error(`llm debug: empty text, reasoning preview: ${preview}`);
+  }
+}
+
 function videoSession(base, job) {
   const id = createHash("sha256")
     .update(`${job.url}#${job.lang}`)
@@ -296,7 +354,16 @@ function cleanBody(text) {
 }
 
 async function generateOnce(
-  { model, retryDelays, session, limiter, priceAt, reasoning, endpoint },
+  {
+    model,
+    retryDelays,
+    session,
+    limiter,
+    priceAt,
+    reasoning,
+    endpoint,
+    debug,
+  },
   { system, prompt, maxOutputTokens, onRetry },
 ) {
   const totalAttempts = retryDelays.length + 1;
@@ -318,14 +385,40 @@ async function generateOnce(
           headers: { "X-OpenCode-Session": session },
         });
       };
-      const { text, usage, finishReason } = await (
-        limiter ? limiter(call) : call()
-      );
+      const result = await (limiter ? limiter(call) : call());
+      const {
+        text,
+        usage,
+        finishReason,
+        rawFinishReason,
+        reasoningText,
+        warnings,
+      } = result;
       const elapsed = (performance.now() - started) / 1000;
       const price = priceAt ? priceAt(at) : null;
       const cost = estimateCost(price, usage);
 
-      return { text, usage, finishReason, elapsed, price, cost };
+      if (debug) {
+        logLlmDebug({
+          maxOutputTokens,
+          reasoning,
+          finishReason,
+          rawFinishReason,
+          text,
+          reasoningText,
+          warnings,
+        });
+      }
+
+      return {
+        text,
+        usage,
+        finishReason,
+        rawFinishReason,
+        elapsed,
+        price,
+        cost,
+      };
     } catch (error) {
       if (!isRetryable(error) || attempt > retryDelays.length) {
         throw new Error(describeError(error, attempt), { cause: error });
@@ -429,6 +522,7 @@ async function toMarkdown(
     priceAt,
     reasoning,
     endpoint,
+    debug,
   },
   title,
   transcript,
@@ -452,6 +546,7 @@ async function toMarkdown(
   const usages = [];
   let elapsed = 0;
   let finishReason = "stop";
+  let rawFinishReason;
   let cost = 0;
   let costKnown = true;
   let price = null;
@@ -460,7 +555,16 @@ async function toMarkdown(
     parts.map(async (part, index) => {
       onProgress?.(index + 1, total);
       const result = await generateOnce(
-        { model, retryDelays, session, limiter, priceAt, reasoning, endpoint },
+        {
+          model,
+          retryDelays,
+          session,
+          limiter,
+          priceAt,
+          reasoning,
+          endpoint,
+          debug,
+        },
         {
           system: SYSTEM,
           prompt: chunkPrompt(title, part, index, total),
@@ -474,8 +578,12 @@ async function toMarkdown(
       if (result.cost === null) costKnown = false;
       else cost += result.cost;
       if (price === null && result.price) price = result.price;
+      if (rawFinishReason === undefined) {
+        rawFinishReason = result.rawFinishReason;
+      }
       if (result.finishReason !== "stop" && finishReason === "stop") {
         finishReason = result.finishReason;
+        rawFinishReason = result.rawFinishReason;
       }
     }),
   );
@@ -487,7 +595,16 @@ async function toMarkdown(
       if (!previousTail || !nextHead) continue;
 
       const smoothing = await generateOnce(
-        { model, retryDelays, session, limiter, priceAt, reasoning, endpoint },
+        {
+          model,
+          retryDelays,
+          session,
+          limiter,
+          priceAt,
+          reasoning,
+          endpoint,
+          debug,
+        },
         {
           system: SMOOTH_SYSTEM,
           prompt: smoothPrompt(previousTail, nextHead),
@@ -515,11 +632,16 @@ async function toMarkdown(
       .replace(/\n{3,}/g, "\n\n")
       .trim(),
   );
+  const emptyParts = bodies.flatMap((part, index) =>
+    part ? [] : [index + 1],
+  );
 
   return {
     body,
     usage: sumUsage(usages),
     finishReason,
+    rawFinishReason,
+    emptyParts,
     elapsed,
     chunks: total,
     cost: costKnown ? cost : null,
@@ -552,6 +674,7 @@ export async function runGenerateMarkdown({
   chunkTargetTokens = DEFAULT_CHUNK_TARGET_TOKENS,
   reasoning = DEFAULT_REASONING,
   force = false,
+  debugLlm = false,
   dir = DEFAULT_DIR,
 } = {}) {
   const key = apiKey ?? process.env.OPENAI_API_KEY;
@@ -559,6 +682,7 @@ export async function runGenerateMarkdown({
   if (!modelId) throw new Error("model is not set (--model)");
   if (!endpoint) throw new Error("endpoint is not set (--endpoint)");
 
+  const debug = debugLlm === true || /^(1|true|yes|on)$/i.test(`${debugLlm}`);
   const RETRY_DELAYS = parseRetryDelays(retryDelays);
   const llmConcurrency = Number(concurrency);
   const vttConcurrency = Number(ytdlpConcurrency);
@@ -703,33 +827,43 @@ export async function runGenerateMarkdown({
         const name = relative(dir, md);
         try {
           const transcript = vttToText(await readFile(job.vtt, "utf8"));
-          const { body, usage, finishReason, elapsed, chunks, cost, price } =
-            await toMarkdown(
-              {
-                model,
-                retryDelays: RETRY_DELAYS,
-                maxOutputTokens,
-                ceiling,
-                chunkTargetTokens,
-                session: videoSession(sessionBase, job),
-                limiter,
-                priceAt,
-                reasoning,
-                endpoint,
-              },
-              job.title,
-              transcript,
-              (nextAttempt, totalAttempts, waitMs, error) => {
-                task.output = `retrying in ${Math.round(waitMs / 1000)}s ` +
-                  `(attempt ${nextAttempt}/${totalAttempts}) ` +
-                  `${describeCause(error)}  ${name}`;
-              },
-              (part, totalParts) => {
-                task.output = totalParts > 1
-                  ? `generating part ${part}/${totalParts}  ${name}`
-                  : `generating  ${name}`;
-              },
-            );
+          const {
+            body,
+            usage,
+            finishReason,
+            rawFinishReason,
+            emptyParts,
+            elapsed,
+            chunks,
+            cost,
+            price,
+          } = await toMarkdown(
+            {
+              model,
+              retryDelays: RETRY_DELAYS,
+              maxOutputTokens,
+              ceiling,
+              chunkTargetTokens,
+              session: videoSession(sessionBase, job),
+              limiter,
+              priceAt,
+              reasoning,
+              endpoint,
+              debug,
+            },
+            job.title,
+            transcript,
+            (nextAttempt, totalAttempts, waitMs, error) => {
+              task.output = `retrying in ${Math.round(waitMs / 1000)}s ` +
+                `(attempt ${nextAttempt}/${totalAttempts}) ` +
+                `${describeCause(error)}  ${name}`;
+            },
+            (part, totalParts) => {
+              task.output = totalParts > 1
+                ? `generating part ${part}/${totalParts}  ${name}`
+                : `generating  ${name}`;
+            },
+          );
 
           stats.totalSeconds += elapsed;
           stats.totalInput += usage?.inputTokens ?? 0;
@@ -748,12 +882,27 @@ export async function runGenerateMarkdown({
             return;
           }
 
+          if (emptyParts.length > 0) {
+            const reason = emptyOutputReason({
+              emptyParts,
+              chunks,
+              finishReason,
+              rawFinishReason,
+              usage,
+            });
+            stats.errors++;
+            stats.failures.push({ name, reason });
+            task.output = `error (${reason})  ${name}`;
+            return;
+          }
+
           const front = frontmatter(job, {
             modelId,
             usage,
             elapsed,
             cost,
             finishReason,
+            rawFinishReason,
             price,
             chunks,
           });

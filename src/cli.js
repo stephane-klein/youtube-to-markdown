@@ -126,6 +126,11 @@ const cli = yargs(hideBin(process.argv))
           describe: "Reasoning effort: provider-default, none, minimal, low, medium, high or xhigh (default: low)",
           type: "string",
         })
+        .option("debug-llm", {
+          describe: "Print LLM request and response diagnostics",
+          type: "boolean",
+          default: false,
+        })
         .option("force", {
           describe: "Regenerate every Markdown file",
           type: "boolean",
@@ -133,7 +138,13 @@ const cli = yargs(hideBin(process.argv))
         }),
     handle(async (argv) => {
       const { feed, settings, dir } = project(argv);
-      await runGenerateMarkdown({ feed, ...settings, dir, force: argv.force });
+      await runGenerateMarkdown({
+        feed,
+        ...settings,
+        dir,
+        force: argv.force,
+        debugLlm: argv.debugLlm,
+      });
     }),
   )
   .command(

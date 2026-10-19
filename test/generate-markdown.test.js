@@ -9,6 +9,7 @@ import {
   DEFAULT_REASONING,
   describeCause,
   describeError,
+  emptyOutputReason,
   estimateCost,
   metricsLine,
   plannedBudget,
@@ -191,4 +192,31 @@ test("describeError appends the attempt count", () => {
     describeError(error, 4),
     "HTTP 503 unavailable after 4 attempt(s)",
   );
+});
+
+test("emptyOutputReason reports the part and the token breakdown", () => {
+  const reason = emptyOutputReason({
+    emptyParts: [1],
+    chunks: 1,
+    finishReason: "stop",
+    rawFinishReason: "stop",
+    usage: usage(14236, 4002, 14208, 4001),
+  });
+  assert.match(reason, /part 1\/1/);
+  assert.match(reason, /finish=stop/);
+  assert.match(reason, /text_tokens=1/);
+  assert.match(reason, /reasoning_tokens=4001/);
+  assert.equal(reason.includes("/stop"), false);
+});
+
+test("emptyOutputReason shows a differing raw finish reason", () => {
+  const reason = emptyOutputReason({
+    emptyParts: [2, 3],
+    chunks: 4,
+    finishReason: "length",
+    rawFinishReason: "max_tokens",
+    usage: usage(100, 10, 0, 9),
+  });
+  assert.match(reason, /part 2,3\/4/);
+  assert.match(reason, /finish=length\/max_tokens/);
 });
