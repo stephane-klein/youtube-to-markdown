@@ -725,9 +725,9 @@ export async function runGenerateMarkdown({
                   `${describeCause(error)}  ${name}`;
               },
               (part, totalParts) => {
-                if (totalParts > 1) {
-                  task.output = `generating part ${part}/${totalParts}  ${name}`;
-                }
+                task.output = totalParts > 1
+                  ? `generating part ${part}/${totalParts}  ${name}`
+                  : `generating  ${name}`;
               },
             );
 
