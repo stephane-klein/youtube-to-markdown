@@ -1,8 +1,11 @@
 import { writeFile } from "node:fs/promises";
 import { stringify } from "yaml";
+import { formatDuration, progressLine } from "./progress.js";
 import { runYtDlp } from "./ytdlp.js";
 
 const DATE_CHUNK = 50;
+
+const count = (value, word) => `${value} ${word}${value === 1 ? "" : "s"}`;
 
 const toIso = (raw) =>
   /^\d{8}$/.test(raw)
@@ -61,12 +64,10 @@ const videoId = (url) => /[?&]v=([\w-]+)/.exec(url)?.[1] ?? url;
 
 async function fetchExactDates(urls) {
   const dates = new Map();
+  const startedAt = performance.now();
 
   for (let i = 0; i < urls.length; i += DATE_CHUNK) {
     const chunk = urls.slice(i, i + DATE_CHUNK);
-    console.error(
-      `  exact dates ${Math.min(i + DATE_CHUNK, urls.length)}/${urls.length}`,
-    );
     const out = await ytDlp(
       [
         "--skip-download",
@@ -84,6 +85,15 @@ async function fetchExactDates(urls) {
       const iso = toIso(raw ?? "");
       if (id && iso) dates.set(id, iso);
     }
+
+    console.error(
+      progressLine({
+        label: "exact dates",
+        done: Math.min(i + DATE_CHUNK, urls.length),
+        total: urls.length,
+        startedAt,
+      }),
+    );
   }
 
   return dates;
@@ -180,9 +190,14 @@ export async function runExtract({
   config = {},
   forceDates = false,
 } = {}) {
+  const startedAt = performance.now();
+  let sourceCount = 0;
+  let videoCount = 0;
+
   for (const channel of config.feed ?? []) {
     if (typeof channel.url !== "string" || !channel.url) continue;
 
+    const channelStartedAt = performance.now();
     const videos = channel.videos ?? [];
     const knownDates = forceDates
       ? new Map()
@@ -197,7 +212,17 @@ export async function runExtract({
     channel.videos = mergeVideos(videos, fetched.videos, {
       sort: !fetched.playlist,
     });
+
+    sourceCount += 1;
+    videoCount += channel.videos.length;
+    console.error(
+      `  done in ${formatDuration(performance.now() - channelStartedAt)}`,
+    );
   }
 
   await writeFile(path, stringify(config, { lineWidth: 0 }));
+
+  console.error(
+    `summary: ${count(sourceCount, "source")}, ${count(videoCount, "video")}, ${formatDuration(performance.now() - startedAt)} elapsed`,
+  );
 }

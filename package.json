@@ -1,6 +1,6 @@
 {
   "name": "@stephane-klein/youtube-to-markdown",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Collect YouTube channel videos into a YAML config with yt-dlp, download transcripts and turn them into Markdown prose with an LLM.",
   "type": "module",
   "license": "MIT",

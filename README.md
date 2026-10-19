@@ -160,7 +160,13 @@ can gate a CI job.
 ```sh
 $ youtube-to-markdown extract-video-metadata
 → https://www.youtube.com/@le_science4all
+  exact dates 50/2217  2.4s elapsed  ~1m 44s left
+  exact dates 100/2217  4.8s elapsed  ~1m 42s left
+  exact dates 2217/2217  1m 46s elapsed
+  done in 1m 46s
 → https://www.youtube.com/@MonsieurPhi
+  done in 12.3s
+summary: 2 sources, 2678 videos, 2m 05s elapsed
 ```
 
 The command is idempotent: a new run only adds the missing videos.
