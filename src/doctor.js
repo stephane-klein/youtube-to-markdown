@@ -2,7 +2,12 @@ import { access, constants } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { generateText } from "ai";
 import { loadConfig, settingsFromConfig } from "./config.js";
-import { createModel, describeError } from "./generate-markdown.js";
+import {
+  createModel,
+  DEFAULT_REASONING,
+  describeError,
+  reasoningOptions,
+} from "./generate-markdown.js";
 import { loadPricing } from "./pricing.js";
 import { exists } from "./vtt.js";
 import { runYtDlp } from "./ytdlp.js";
@@ -124,11 +129,13 @@ async function checkLlm({ llm, settings, key, timeoutMs }) {
       session: settings.session,
     });
     const started = performance.now();
+    const reasoning = settings.reasoning ?? DEFAULT_REASONING;
     const { usage } = await generateText({
       model,
       prompt: "ping",
       maxOutputTokens: 8,
       maxRetries: 0,
+      ...reasoningOptions(reasoning, settings.endpoint),
       abortSignal: AbortSignal.timeout(timeoutMs),
     });
     const elapsed = (performance.now() - started) / 1000;
@@ -218,6 +225,12 @@ export async function runDoctor({
   if (settings.session) {
     rows.push({ label: "session", value: "set", status: "info", note: null });
   }
+  rows.push({
+    label: "reasoning",
+    value: settings.reasoning ?? DEFAULT_REASONING,
+    status: "info",
+    note: null,
+  });
   rows.push({ label: "pricing", ...(await checkPricing({ settings })) });
   const llmRow = await checkLlm({ llm, settings, key, timeoutMs });
   rows.push({ label: "llm", ...llmRow });

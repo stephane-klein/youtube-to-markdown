@@ -5,8 +5,11 @@ import {
   chunkPrompt,
   cleanBody,
   createLimiter,
+  DEFAULT_REASONING,
   estimateCost,
+  metricsLine,
   plannedBudget,
+  reasoningOptions,
   smoothPrompt,
   sumUsage,
 } from "../src/generate-markdown.js";
@@ -114,4 +117,39 @@ test("createLimiter caps the number of concurrent tasks", async () => {
   );
   assert.deepEqual(results, Array(6).fill("done"));
   assert.equal(peak, 2);
+});
+
+test("DEFAULT_REASONING stays low when the setting is absent", () => {
+  assert.equal(DEFAULT_REASONING, "low");
+});
+
+test("reasoningOptions passes the effort to the provider", () => {
+  assert.deepEqual(reasoningOptions("low", "https://api.deepseek.com"), {
+    reasoning: "low",
+  });
+  assert.deepEqual(reasoningOptions("provider-default"), {
+    reasoning: "provider-default",
+  });
+});
+
+test("reasoningOptions leaves the provider default untouched when unset", () => {
+  assert.deepEqual(reasoningOptions(undefined), {});
+  assert.deepEqual(reasoningOptions(""), {});
+});
+
+test("reasoningOptions disables thinking for DeepSeek when none", () => {
+  assert.deepEqual(reasoningOptions("none", "https://api.deepseek.com"), {
+    providerOptions: {
+      opencode: { thinking: { type: "disabled" } },
+    },
+  });
+  assert.deepEqual(reasoningOptions("none", "https://example.com"), {
+    reasoning: "none",
+  });
+});
+
+test("metricsLine reports reasoning tokens when present", () => {
+  const line = metricsLine("model", usage(100, 50, 0, 10), 1.25, 0.001);
+  assert.match(line, /10 reasoning/);
+  assert.match(line, /llm 1\.3s/);
 });

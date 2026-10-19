@@ -24,6 +24,7 @@ const SETTING_KEYS = [
   "retryDelays",
   "maxOutputTokens",
   "chunkTargetTokens",
+  "reasoning",
 ];
 
 const handle = (run) => async (argv) => {
@@ -121,6 +122,10 @@ const cli = yargs(hideBin(process.argv))
           describe: "Target input tokens per chunk when a transcript is split (default: 8000)",
           type: "number",
         })
+        .option("reasoning", {
+          describe: "Reasoning effort: provider-default, none, minimal, low, medium, high or xhigh (default: low)",
+          type: "string",
+        })
         .option("force", {
           describe: "Regenerate every Markdown file",
           type: "boolean",
@@ -175,6 +180,10 @@ const cli = yargs(hideBin(process.argv))
           describe: "Value of the X-OpenCode-Session header",
           type: "string",
         })
+        .option("reasoning", {
+          describe: "Reasoning effort to test (default: low)",
+          type: "string",
+        })
         .option("llm", {
           describe: "Run a minimal LLM request to test the API access",
           type: "boolean",
@@ -193,6 +202,7 @@ const cli = yargs(hideBin(process.argv))
           endpoint: argv.endpoint,
           apiKey: argv.apiKey,
           session: argv.session,
+          reasoning: argv.reasoning,
         },
         llm: argv.llm,
         timeoutMs: argv.timeout * 1000,

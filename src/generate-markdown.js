@@ -68,6 +68,7 @@ function estimateCost(price, usage) {
 const OUTPUT_FACTOR = 2;
 const OUTPUT_FLOOR = 2048;
 const DEFAULT_CEILING = 32768;
+const DEFAULT_REASONING = "low";
 const DEFAULT_CHUNK_TARGET_TOKENS = 8000;
 
 function isSet(value) {
@@ -88,12 +89,14 @@ function budgetForPart(text, { maxOutputTokens, ceiling }) {
 }
 
 function metricsLine(modelId, usage, elapsed, cost) {
+  const reasoning = usage?.outputTokenDetails?.reasoningTokens;
   return [
     modelId,
     `llm ${elapsed.toFixed(1)}s`,
     usage
       ? `${usage.inputTokens ?? 0} in / ${usage.outputTokens ?? 0} out`
       : "usage ?",
+    reasoning ? `${reasoning} reasoning` : null,
     cost === null ? null : `~$${cost.toFixed(6)}`,
   ]
     .filter(Boolean)
@@ -112,6 +115,8 @@ function frontmatter(job, { modelId, usage, elapsed, cost, finishReason, price, 
       input_tokens: usage?.inputTokens ?? null,
       cached_input_tokens: usage ? cachedInputTokens(usage) : null,
       output_tokens: usage?.outputTokens ?? null,
+      reasoning_tokens: usage?.outputTokenDetails?.reasoningTokens ?? null,
+      text_tokens: usage?.outputTokenDetails?.textTokens ?? null,
       estimated_cost_usd: cost === null ? null : Number(cost.toFixed(6)),
       finish_reason: finishReason,
       pricing: price ? { source: price.source, peak: price.peak } : null,
@@ -258,6 +263,19 @@ export function createModel({ modelId, endpoint, apiKey, session }) {
   return provider(modelId);
 }
 
+export function reasoningOptions(reasoning, endpoint = "") {
+  if (reasoning === "none") {
+    return /deepseek/i.test(endpoint)
+      ? {
+          providerOptions: {
+            opencode: { thinking: { type: "disabled" } },
+          },
+        }
+      : { reasoning: "none" };
+  }
+  return reasoning ? { reasoning } : {};
+}
+
 function videoSession(base, job) {
   const id = createHash("sha256")
     .update(`${job.url}#${job.lang}`)
@@ -275,7 +293,7 @@ function cleanBody(text) {
 }
 
 async function generateOnce(
-  { model, retryDelays, session, limiter, priceAt },
+  { model, retryDelays, session, limiter, priceAt, reasoning, endpoint },
   { system, prompt, maxOutputTokens, onRetry },
 ) {
   const totalAttempts = retryDelays.length + 1;
@@ -291,7 +309,7 @@ async function generateOnce(
           system,
           prompt,
           temperature: 0.2,
-          reasoning: "low",
+          ...reasoningOptions(reasoning, endpoint),
           maxOutputTokens,
           maxRetries: 0,
           headers: { "X-OpenCode-Session": session },
@@ -406,6 +424,8 @@ async function toMarkdown(
     session,
     limiter,
     priceAt,
+    reasoning,
+    endpoint,
   },
   title,
   transcript,
@@ -437,7 +457,7 @@ async function toMarkdown(
     parts.map(async (part, index) => {
       onProgress?.(index + 1, total);
       const result = await generateOnce(
-        { model, retryDelays, session, limiter, priceAt },
+        { model, retryDelays, session, limiter, priceAt, reasoning, endpoint },
         {
           system: SYSTEM,
           prompt: chunkPrompt(title, part, index, total),
@@ -464,7 +484,7 @@ async function toMarkdown(
       if (!previousTail || !nextHead) continue;
 
       const smoothing = await generateOnce(
-        { model, retryDelays, session, limiter, priceAt },
+        { model, retryDelays, session, limiter, priceAt, reasoning, endpoint },
         {
           system: SMOOTH_SYSTEM,
           prompt: smoothPrompt(previousTail, nextHead),
@@ -527,6 +547,7 @@ export async function runGenerateMarkdown({
   retryDelays = "10,30,60",
   maxOutputTokens,
   chunkTargetTokens = DEFAULT_CHUNK_TARGET_TOKENS,
+  reasoning = DEFAULT_REASONING,
   force = false,
   dir = DEFAULT_DIR,
 } = {}) {
@@ -689,6 +710,8 @@ export async function runGenerateMarkdown({
                 session: videoSession(sessionBase, job),
                 limiter,
                 priceAt,
+                reasoning,
+                endpoint,
               },
               job.title,
               transcript,
@@ -766,7 +789,9 @@ export {
   chunkPrompt,
   cleanBody,
   createLimiter,
+  DEFAULT_REASONING,
   estimateCost,
+  metricsLine,
   plannedBudget,
   smoothPrompt,
   sumUsage,

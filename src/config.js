@@ -15,6 +15,7 @@ const YAML_KEYS = {
   retryDelays: "retry_delays",
   maxOutputTokens: "max_output_tokens",
   chunkTargetTokens: "chunk_target_tokens",
+  reasoning: "reasoning",
 };
 
 export function settingsFromConfig(config) {
@@ -36,6 +37,7 @@ const ENV = {
   retryDelays: "YT_TO_MD_RETRY_DELAYS",
   maxOutputTokens: "YT_TO_MD_MAX_OUTPUT_TOKENS",
   chunkTargetTokens: "YT_TO_MD_CHUNK_TARGET_TOKENS",
+  reasoning: "YT_TO_MD_REASONING",
 };
 
 export function loadEnv(env = process.env) {

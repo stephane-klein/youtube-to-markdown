@@ -184,8 +184,9 @@ variables, then the settings written in the YAML file, then the built-in
 defaults. The API key stays a secret: `--api-key` or `OPENAI_API_KEY`. The
 settings are `x_opencode_session`, `model_id`, `openaiapi_endpoint`,
 `concurrency` and `ytdlp_concurrency` (plus the optional `api_key`,
-`retry_delays`, `max_output_tokens` and `chunk_target_tokens`). I only set the
-source URLs, and the `extract-video-metadata` command fills the rest:
+`retry_delays`, `max_output_tokens`, `chunk_target_tokens` and `reasoning`). I
+only set the source URLs, and the `extract-video-metadata` command fills the
+rest:
 
 `x_opencode_session` is the base of the `X-OpenCode-Session` header; it is
 optional and specific to OpenCode. A stable per-video suffix is appended to it,
@@ -339,6 +340,23 @@ from the server is honored when longer than the schedule. Each retry is shown in
 the phase output; after the last attempt the file is reported as an error and is
 retried on the next run.
 
+### Reasoning effort
+
+The command asks the model for a reasoning effort of `low` by default. Set
+`reasoning` in the YAML file, `YT_TO_MD_REASONING`, or `--reasoning` to change
+it. The accepted values are `provider-default`, `none`, `minimal`, `low`,
+`medium`, `high` and `xhigh`, as exposed by ai-sdk. `none` disables reasoning:
+on a DeepSeek endpoint it sends the provider-specific `thinking: disabled`
+option, elsewhere it sends `reasoning: none`. `provider-default` leaves the
+choice to the provider.
+
+```yaml
+reasoning: "none"
+```
+
+The `doctor` command shows the effective value and applies it to its test
+request, so it reflects the real configuration.
+
 ### Output budget and long transcripts
 
 The model must rewrite the whole transcript, so the command asks it for roughly
@@ -374,6 +392,8 @@ llm:
   input_tokens: 4428
   cached_input_tokens: 0
   output_tokens: 3262
+  reasoning_tokens: 0
+  text_tokens: 3262
   estimated_cost_usd: 0.000927
   finish_reason: stop
   pricing:
