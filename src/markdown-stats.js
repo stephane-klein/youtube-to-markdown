@@ -5,6 +5,7 @@ import { DEFAULT_DIR } from "./vtt.js";
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 const LANGUAGE = /\.([^./]+)\.md$/;
+const DIALOGUE = /\.dialogue\.md$/i;
 
 async function markdownFiles(dir, base = dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -13,7 +14,11 @@ async function markdownFiles(dir, base = dir) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await markdownFiles(path, base)));
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+    } else if (
+      entry.isFile() &&
+      entry.name.endsWith(".md") &&
+      !DIALOGUE.test(entry.name)
+    ) {
       files.push(relative(base, path));
     }
   }

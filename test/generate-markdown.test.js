@@ -7,15 +7,23 @@ import {
   cleanBody,
   createLimiter,
   DEFAULT_REASONING,
+  detectPrompt,
+  detectionSample,
   describeCause,
   describeError,
   emptyOutputReason,
   estimateCost,
+  frontmatter,
+  looksLikeSummary,
   metricsLine,
+  normalizeSpeakerLabels,
+  outputLimitError,
+  parseDetection,
   plannedBudget,
   reasoningOptions,
   smoothPrompt,
   sumUsage,
+  summaryMarkers,
 } from "../src/generate-markdown.js";
 
 const usage = (input, output, cached = 0, reasoning = 0) => ({
@@ -32,6 +40,11 @@ test("plannedBudget doubles the input estimate within the ceiling", () => {
   assert.equal(plannedBudget("x".repeat(35000), 10000), 10000);
 });
 
+test("plannedBudget accepts a larger factor for speaker labelling", () => {
+  assert.equal(plannedBudget("x".repeat(35000), 384000, 3), 30000);
+  assert.equal(plannedBudget("x".repeat(35000), 10000, 3), 10000);
+});
+
 test("budgetForPart prefers an explicit max_output_tokens override", () => {
   const text = "x".repeat(35000);
   assert.equal(budgetForPart(text, { maxOutputTokens: "4000", ceiling: 384000 }), 4000);
@@ -39,10 +52,19 @@ test("budgetForPart prefers an explicit max_output_tokens override", () => {
   assert.equal(budgetForPart(text, { maxOutputTokens: "", ceiling: 5000 }), 5000);
 });
 
-test("chunkPrompt keeps the single-part prompt unchanged", () => {
+test("chunkPrompt includes the fidelity reminder in the single-part prompt", () => {
   assert.equal(
     chunkPrompt("Title", "body", 0, 1),
-    "Title: Title\n\nTranscript:\nbody",
+    "Title: Title\n\n" +
+      "Keep the speaker's spoken words and word order: do not correct the grammar.\n\n" +
+      "Transcript:\nbody",
+  );
+});
+
+test("chunkPrompt includes the fidelity reminder in multi-part prompts", () => {
+  assert.match(
+    chunkPrompt("Title", "body", 1, 3),
+    /do not correct the grammar/,
   );
 });
 
@@ -56,6 +78,90 @@ test("smoothPrompt exposes both sides of the junction", () => {
   const prompt = smoothPrompt("previous", "next");
   assert.match(prompt, /previous/);
   assert.match(prompt, /next/);
+});
+
+test("detectionSample keeps the beginning and the end of a long text", () => {
+  const body = `${"a".repeat(9000)}${"b".repeat(3000)}`;
+  const sample = detectionSample(body);
+  assert.match(sample, /^a{8000}/);
+  assert.match(sample, /b{2000}$/);
+  assert.match(sample, /\[\.\.\.\]/);
+});
+
+test("detectionSample keeps a short text unchanged", () => {
+  assert.equal(detectionSample("short transcript"), "short transcript");
+});
+
+test("detectPrompt includes the title and the sample", () => {
+  const prompt = detectPrompt("Title", "Body");
+  assert.match(prompt, /Title: Title/);
+  assert.match(prompt, /Body/);
+});
+
+test("parseDetection reads a JSON answer", () => {
+  assert.deepEqual(
+    parseDetection(
+      JSON.stringify({
+        likely_dialogue: true,
+        confidence: "high",
+        speakers: [
+          { label: "Journaliste", type: "role" },
+          { label: "Jean-Luc Mélenchon", type: "name" },
+        ],
+      }),
+    ),
+    {
+      likelyDialogue: true,
+      confidence: "high",
+      speakers: [
+        { label: "Journaliste", type: "role" },
+        { label: "Jean-Luc Mélenchon", type: "name" },
+      ],
+    },
+  );
+});
+
+test("parseDetection accepts code fences and string speakers", () => {
+  const result = parseDetection(
+    "```json\n{\"likely_dialogue\": false, \"speakers\": [\"Narrateur\"]}\n```",
+  );
+  assert.equal(result.likelyDialogue, false);
+  assert.deepEqual(result.speakers, [{ label: "Narrateur", type: "role" }]);
+});
+
+test("parseDetection falls back to unknown on invalid JSON", () => {
+  assert.deepEqual(parseDetection("not json"), {
+    likelyDialogue: null,
+    confidence: "low",
+    speakers: [],
+  });
+});
+
+test("normalizeSpeakerLabels merges a standalone label with the next block", () => {
+  assert.equal(
+    normalizeSpeakerLabels("**Journaliste :**\n\nBonjour."),
+    "**Journaliste :** Bonjour.",
+  );
+});
+
+test("normalizeSpeakerLabels keeps distinct speaker turns", () => {
+  const body =
+    "**Journaliste :** Bonjour.\n\n**Jean-Luc Mélenchon :** Bonsoir.";
+  assert.equal(normalizeSpeakerLabels(body), body);
+});
+
+test("normalizeSpeakerLabels leaves a bold non-label block untouched", () => {
+  assert.equal(
+    normalizeSpeakerLabels("**Important.**\n\nTexte."),
+    "**Important.**\n\nTexte.",
+  );
+});
+
+test("normalizeSpeakerLabels does not merge a label with a heading", () => {
+  assert.equal(
+    normalizeSpeakerLabels("**Journaliste :**\n\n## Suite"),
+    "**Journaliste :**\n\n## Suite",
+  );
 });
 
 test("sumUsage sums every usage field", () => {
@@ -219,4 +325,114 @@ test("emptyOutputReason shows a differing raw finish reason", () => {
   });
   assert.match(reason, /part 2,3\/4/);
   assert.match(reason, /finish=length\/max_tokens/);
+});
+
+test("frontmatter records likely_dialogue", () => {
+  const output = frontmatter(
+    { url: "https://example.com/video", titles: { fr: "Title" }, lang: "fr" },
+    {
+      modelId: "mimo-v2.5",
+      usage: usage(10, 5),
+      elapsed: 1.2,
+      cost: 0.001,
+      finishReason: "stop",
+      rawFinishReason: "stop",
+      price: null,
+      chunks: 1,
+      likelyDialogue: true,
+    },
+  );
+  assert.match(output, /likely_dialogue: true/);
+  assert.match(output, /^---\n/);
+  assert.match(output, /\n---\n\n$/);
+});
+
+test("frontmatter writes null when dialogue detection is unknown", () => {
+  const output = frontmatter(
+    { url: "https://example.com/video", titles: { fr: "Title" }, lang: "fr" },
+    {
+      modelId: "mimo-v2.5",
+      usage: usage(10, 5),
+      elapsed: 1.2,
+      cost: 0.001,
+      finishReason: "stop",
+      rawFinishReason: "stop",
+      price: null,
+      chunks: 1,
+      likelyDialogue: null,
+    },
+  );
+  assert.match(output, /likely_dialogue: null/);
+});
+
+test("looksLikeSummary detects third-person reported speech", () => {
+  const body = [
+    "L’entretien s’ouvre sur le constat que la France a montré deux visages.",
+    "La journaliste propose de revenir sur cette journée.",
+    "Jean-Luc Mélenchon répond qu’il est sous le choc des images.",
+    "Il souligne que les personnages sont les mêmes.",
+  ].join(" ");
+  assert.equal(looksLikeSummary(body), true);
+  assert.deepEqual(summaryMarkers(body), [
+    "interview opening",
+    "journalist narration",
+    "reported answer",
+  ]);
+});
+
+test("looksLikeSummary accepts a faithful first-person transcript", () => {
+  const body =
+    "Bonsoir, Jean-Luc Mélenchon. Bonsoir. Hier, la France a montré deux visages. " +
+    "D'un côté, des centaines de milliers de personnes mobilisées pacifiquement.";
+  assert.equal(looksLikeSummary(body), false);
+  assert.deepEqual(summaryMarkers(body), []);
+});
+
+test("looksLikeSummary needs a strong marker and three markers", () => {
+  assert.equal(
+    looksLikeSummary("Il répond que oui. Il souligne que non."),
+    false,
+  );
+});
+
+test("outputLimitError explains the output limit and suggests a budget", () => {
+  const error = outputLimitError({
+    label: "markdown generation",
+    budget: 26062,
+    ceiling: 393216,
+    usage: usage(100, 26062, 0, 9369),
+    finishReason: "length",
+    rawFinishReason: "max_tokens",
+  });
+  assert.equal(error.code, "OUTPUT_LIMIT");
+  assert.match(error.message, /markdown generation reached the output limit/);
+  assert.match(error.message, /finishReason=length\/max_tokens/);
+  assert.match(error.message, /max_tokens=26062/);
+  assert.match(error.message, /output_tokens=26062/);
+  assert.match(error.message, /reasoning_tokens=9369/);
+  assert.match(error.message, /text_tokens=16693/);
+  assert.match(error.message, /try 52124/);
+});
+
+test("outputLimitError points to the model maximum when the budget cannot grow", () => {
+  const error = outputLimitError({
+    budget: 1000,
+    ceiling: 1000,
+    usage: usage(10, 1000),
+    finishReason: "length",
+  });
+  assert.match(error.message, /the model maximum/);
+  assert.match(error.message, /lower the reasoning effort or split the input/);
+});
+
+test("outputLimitError explains a budget spent entirely on reasoning", () => {
+  const error = outputLimitError({
+    label: "speaker labelling",
+    budget: 39207,
+    ceiling: 393216,
+    usage: usage(100, 39207, 0, 39207),
+    finishReason: "length",
+  });
+  assert.match(error.message, /wrote no text/);
+  assert.match(error.message, /non-reasoning model/);
 });

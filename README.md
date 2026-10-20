@@ -82,6 +82,7 @@ Commands:
   download-vtt            Download the VTT transcripts of the marked videos
   generate-markdown       Turn the VTT transcripts into Markdown prose with an
                           LLM
+  label-speakers          Add speaker labels to dialogue Markdown files
   markdown-stats          Report global tokens, cost and time from the Markdown
                           frontmatter
   reorganize              Move the transcripts and Markdown into their
@@ -297,6 +298,10 @@ downloaded first if it is not there yet:
       fr: true
     generate_markdown:
       fr: true
+    # Optional: force or disable dialogue labelling.
+    dialogue: true
+    # Optional: impose the speaker labels used by the labelling pass.
+    # speakers: [Journaliste, Jean-Luc Mélenchon]
 ```
 
 Before the first run, provide your API key through the `OPENAI_API_KEY`
@@ -321,17 +326,30 @@ The command sends each transcript to an LLM through ai-sdk, configured with the
 API key (`OPENAI_API_KEY` or `--api-key`), the model (`YT_TO_MD_MODEL_ID` or
 `--model`) and the endpoint (`YT_TO_MD_OPENAIAPI_ENDPOINT` or `--endpoint`), and
 gets back Markdown prose with section headings when the talk needs them.
-Paragraphs are hard-wrapped at 80 columns. The result goes to
-`contents/<date>_<slug>.<lang>.md`. A second run reports `already generated` and
-writes nothing.
+Paragraphs are hard-wrapped at 80 columns. The flat text goes to
+`contents/<date>_<slug>.<lang>.md`; the frontmatter records
+`likely_dialogue: true`, `false` or `null`.
 
-The command runs in two sequential phases. `Download transcripts` reports how many
+When the video is a dialogue, a second pass adds speaker labels and writes
+`contents/<date>_<slug>.<lang>.dialogue.md`. Each turn starts with a bold label
+inferred from the transcript, for example `**Journaliste :**` or
+`**Jean-Luc Mélenchon :**`. The flat `.md` is never modified by this pass, and
+the labelling pass refuses to write anything if its output changes the text.
+
+Set `dialogue: true` in the feed to force labelling, `dialogue: false` to
+disable it, or leave it out to let the command detect the dialogue from an
+excerpt of the flat text. `speakers` is optional and fixes the labels used by
+the second pass; a non-empty list also marks the video as a dialogue. `youtube-to-markdown label-speakers` reruns only the labelling
+pass on existing flat files, without regenerating the text.
+
+The command runs in three sequential phases. `Download transcripts` reports how many
 videos have a transcript (`available/total`) and fetches the missing ones, at
 most `--ytdlp-concurrency` at a time (default 2); only downloads, skips and errors
-are listed. The `Generate markdown` phase then converts the transcripts, at most
-`--concurrency` at a time (default 6), reporting the number of up-to-date
-Markdown files over the whole feed (`ready/total, N already`). Each phase keeps
-only the last 20 events on screen, so it stays bounded even with a large feed.
+are listed. The `Generate markdown` phase converts the transcripts into flat
+text, at most `--concurrency` at a time (default 6), reporting the number of
+up-to-date Markdown files over the whole feed (`ready/total, N already`). The
+`Label speakers` phase then labels the dialogue files. Each phase keeps only the
+last 20 events on screen, so it stays bounded even with a large feed.
 
 Retryable API errors (HTTP 408, 409, 429 or >= 500) are retried with growing
 delays — 10 s, 30 s, 60 s by default, configurable with `--retry-delays`
@@ -382,12 +400,14 @@ request, so it reflects the real configuration.
 
 ### Output budget and long transcripts
 
-The model must rewrite the whole transcript, so the command asks it for roughly
-twice the input size (`maxOutputTokens`). That budget is capped per call: the
+The model must rewrite the whole transcript, so the generation pass asks it for
+roughly twice the input size (`maxOutputTokens`). The speaker-labelling pass
+asks for three times the size of the flat text, because the model's reasoning
+tokens count against the same budget. That budget is capped per call: the
 command reads the model's advertised output limit from the pricing catalogs and
 uses it as the ceiling; if the catalog has no entry it falls back to 32768
 tokens. `--max-output-tokens` (or `YT_TO_MD_MAX_OUTPUT_TOKENS`) overrides the
-ceiling by hand.
+ceiling by hand and still wins over the computed factor.
 
 When the projected output would exceed the ceiling — a long video on a model
 with a small output limit — the transcript is split into chunks that each fit
@@ -409,6 +429,7 @@ Each generated file starts with a YAML frontmatter describing the run:
 source_url: https://www.youtube.com/watch?v=PxRPpdzmbUQ
 video_title: Pourquoi π est-il si fou ? Relativité 1
 generated_at: 2026-09-19T10:12:33.456Z
+likely_dialogue: false
 llm:
   model: mimo-v2.5
   chunks: 1
@@ -427,8 +448,10 @@ llm:
 ---
 ```
 
-`video_title` is the original video title in the file's language and
-`generated_at` is the UTC time of the generation. `pricing.source` names the
+`video_title` is the original video title in the file's language,
+`generated_at` is the UTC time of the generation and `likely_dialogue` records
+whether the text looks like a dialogue between two or more people (`null` when
+the detection was inconclusive). `pricing.source` names the
 catalog the rates came from and `pricing.peak` tells whether the peak rate
 applied to the first call (`null` when the source has no peak/off-peak pricing).
 Existing files are left untouched: run `youtube-to-markdown generate-markdown
@@ -449,6 +472,52 @@ unavailable, `estimated_cost_usd` is `null` and the run continues.
 The rate is sampled at the start of every LLM call, so a run that straddles a
 peak/off-peak boundary is priced with the right rate on each side. The
 `pricing` block in the frontmatter describes the first call of the file.
+
+### Dialogue videos and speaker labels
+
+The pipeline keeps the generated text and the speaker attribution separate:
+
+1. the flat file (`...fr.md`) is the reference text;
+2. the dialogue file (`...fr.dialogue.md`) is a derived annotation that only
+   inserts `**Speaker :**` labels and blank lines.
+
+The generation pass is a transcription pass, not a summary: it must preserve
+the speaker's words, keep direct speech direct, and never turn the interview
+into a third-person narrative. It must also preserve the oral syntax of the
+spoken language — repetitions, false starts, unusual word order — instead of
+correcting it into a more formal or more standard form; the model is only
+allowed to fix what comes from the automatic transcription (timestamps, broken
+cues, punctuation, capitalisation, misheard words). If the generated text
+looks like a summary
+(for example `the journalist asks`, `he explains`, `L’entretien s’ouvre`), the
+file is reported as an error and no `.md` is written.
+
+The labelling pass does not ask the model to copy the text. It splits the flat
+body into numbered sentences and asks for a JSON list of speaker turns:
+
+```json
+{ "turns": [{ "start": 0, "speaker": "Journaliste" }] }
+```
+
+`start` is the sentence index shown to the model, not a line number. Only the
+first sentence of a turn is listed; the following sentences belong to the same
+speaker until the next `start`. The renderer inserts the `**Speaker :**` labels
+into the frozen sentences, so the text cannot be rewritten or truncated. The
+model receives compact short-line VTT cues rather than the full transcript.
+
+Headings are displayed in the numbered prompt but are never numbered or
+labelled. Invalid JSON, invalid indices, a missing first turn or a single
+speaker triggers one stricter retry; after that the command reports an error
+with an output preview. When a pass reaches its output limit, the command fails
+immediately with an explicit message showing `max_tokens`, `output_tokens`,
+`reasoning_tokens` and `text_tokens`, and suggests either a larger
+`--max-output-tokens` or a lower reasoning effort.
+
+The `dialogue` key in `feed.yaml` is optional. Without it, a short LLM pass
+samples the beginning and the end of the flat text and writes
+`likely_dialogue` in the frontmatter. `--label-uncertain` also labels files whose
+detection returned `null`. Existing flat files are not migrated automatically:
+the new naming applies to files generated by this version.
 
 ## Organize the files into folders
 
@@ -473,7 +542,8 @@ target already exists, or a filename shared by two channels with different
 ## Report the tokens, cost and time
 
 `markdown-stats` reads the frontmatter of every `*.md` under `contents_path`
-(recursively) and prints global totals — tokens, estimated cost, processing
+(recursively), ignoring the `*.dialogue.md` derivatives to avoid counting the
+same video twice, and prints global totals — tokens, estimated cost, processing
 time — with a breakdown per model, per language and per folder (`folder_slug`,
 or `(root)` when the file sits at the root of `contents_path`):
 

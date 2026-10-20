@@ -112,6 +112,17 @@ export async function downloadVtt(url, lang, dest) {
 }
 
 export function videoJobs(video, dir = DEFAULT_DIR, folderSlug = null) {
+  if (
+    video.dialogue !== undefined &&
+    video.dialogue !== null &&
+    typeof video.dialogue !== "boolean"
+  ) {
+    throw new Error("dialogue must be a boolean");
+  }
+  if (video.speakers !== undefined && !Array.isArray(video.speakers)) {
+    throw new Error("speakers must be an array");
+  }
+
   const folder = assertFolderSlug(folderSlug);
   const langs = Object.entries(video.download_vtt ?? {})
     .filter(([, on]) => on)
@@ -131,9 +142,12 @@ export function videoJobs(video, dir = DEFAULT_DIR, folderSlug = null) {
       lang,
       title: primaryTitle(video),
       titles: video.title,
+      dialogue: video.dialogue,
+      speakers: video.speakers,
       base,
       vtt: `${base}.vtt`,
       marker: `${base}.vtt.missing`,
+      labeled: `${base}.dialogue.md`,
     };
   });
 }

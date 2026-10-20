@@ -8,6 +8,7 @@ import { loadConfig, loadEnv, settingsFromConfig } from "./config.js";
 import { runExtract } from "./extract-video-metadata.js";
 import { runDownloadVtt } from "./download-vtt.js";
 import { runGenerateMarkdown } from "./generate-markdown.js";
+import { runLabelSpeakers } from "./label-speakers.js";
 import { runMarkdownStats } from "./markdown-stats.js";
 import { runReorganize } from "./organize-files.js";
 import { runDoctor } from "./doctor.js";
@@ -135,6 +136,11 @@ const cli = yargs(hideBin(process.argv))
           describe: "Regenerate every Markdown file",
           type: "boolean",
           default: false,
+        })
+        .option("label-uncertain", {
+          describe: "Label files whose dialogue detection is inconclusive",
+          type: "boolean",
+          default: false,
         }),
     handle(async (argv) => {
       const { feed, settings, dir } = project(argv);
@@ -143,7 +149,86 @@ const cli = yargs(hideBin(process.argv))
         ...settings,
         dir,
         force: argv.force,
+        labelUncertain: argv.labelUncertain,
         debugLlm: argv.debugLlm,
+      });
+      await runLabelSpeakers({
+        feed,
+        ...settings,
+        dir,
+        force: argv.force,
+        labelUncertain: argv.labelUncertain,
+        debugLlm: argv.debugLlm,
+      });
+    }),
+  )
+  .command(
+    "label-speakers",
+    "Add speaker labels to dialogue Markdown files",
+    (yargs) =>
+      yargs
+        .option("model", {
+          describe: "LLM model id (default: model_id in the configuration)",
+          type: "string",
+        })
+        .option("endpoint", {
+          describe: "OpenAI-compatible chat completions endpoint",
+          type: "string",
+        })
+        .option("api-key", {
+          describe: "API key (defaults to OPENAI_API_KEY)",
+          type: "string",
+        })
+        .option("session", {
+          describe: "Value of the X-OpenCode-Session header",
+          type: "string",
+        })
+        .option("concurrency", {
+          describe: "Maximum number of concurrent LLM calls (default: 6)",
+          type: "number",
+        })
+        .option("retry-delays", {
+          describe: "Comma-separated retry delays in seconds (default: 10,30,60)",
+          type: "string",
+        })
+        .option("max-output-tokens", {
+          describe: "Override the computed output token budget",
+          type: "number",
+        })
+        .option("reasoning", {
+          describe: "Reasoning effort: provider-default, none, minimal, low, medium, high or xhigh (default: low)",
+          type: "string",
+        })
+        .option("debug-llm", {
+          describe: "Print LLM request and response diagnostics",
+          type: "boolean",
+          default: false,
+        })
+        .option("force", {
+          describe: "Regenerate every labelled file",
+          type: "boolean",
+          default: false,
+        })
+        .option("label-uncertain", {
+          describe: "Label files whose dialogue detection is inconclusive",
+          type: "boolean",
+          default: false,
+        })
+        .option("dry-run", {
+          describe: "Show the files that would be labelled without calling the LLM",
+          type: "boolean",
+          default: false,
+        }),
+    handle(async (argv) => {
+      const { feed, settings, dir } = project(argv);
+      await runLabelSpeakers({
+        feed,
+        ...settings,
+        dir,
+        force: argv.force,
+        labelUncertain: argv.labelUncertain,
+        debugLlm: argv.debugLlm,
+        dryRun: argv.dryRun,
       });
     }),
   )

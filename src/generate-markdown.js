@@ -14,6 +14,7 @@ import {
   replaceFirstBlock,
 } from "./chunk.js";
 import { loadPricing } from "./pricing.js";
+import { vttToText } from "./vtt-cues.js";
 import {
   DEFAULT_DIR,
   downloadVtt,
@@ -24,14 +25,27 @@ import {
 } from "./vtt.js";
 
 const SYSTEM = [
-  "You convert a YouTube video transcript into clean, readable Markdown prose.",
+  "You clean up a YouTube video transcript so it can be read, without rewriting it.",
+  "- You are not an editor: you do not improve the text and you do not correct the speaker.",
+  "- The output is a citable transcript, in the speaker's own words and own word order.",
   "- Write in the same language as the transcript.",
+  "- You are transcribing, not summarizing. Preserve the speaker's words and the direct speech.",
   "- Do not summarize and do not add facts that are not in the transcript.",
+  "- Never convert direct speech into reported speech: do not write phrases like \"the journalist asks\", \"X says that\" or \"he explains\".",
+  "- Keep the repetitions, digressions and examples from the transcript.",
+  "- The transcript is spoken language, often improvised. Keep its oral syntax, even when it is loose: repeated words, false starts, unfinished sentences, unusual word order, dropped negations.",
+  "- Do not correct, reword, reorder or \"improve\" the speaker's grammar. Never replace an oral turn of phrase by a more formal or more standard one.",
+  "- Only fix what comes from the automatic transcription: timestamps, broken cues, missing punctuation, capitalisation and obviously misheard words.",
+  "- Example: if the transcript says \"comment vous caractérisez, comment vous qualifiez la journée\", keep \"comment vous caractérisez, comment vous qualifiez la journée\". Do not write \"comment caractérisez-vous, comment qualifiez-vous la journée\".",
   "- Merge the fragmented cues into full sentences and paragraphs.",
+  "- Do not add speaker labels, speaker names or dialogue formatting.",
+  "- Do not write lines like `**Name :**` or `Name:`, and do not use bold to mark speaker turns.",
+  "- If the transcript is a dialogue, keep the original order of the turns but do not label them.",
   "- You may add section headings (##, ###) when the transcript clearly moves between topics.",
   "- Do not add a main title, it is provided separately.",
   "- Do not wrap the output in code fences.",
   "- Output only the Markdown body.",
+  "- Before answering, reread your text sentence by sentence and check that no sentence has been turned into a more formal or more standard version of the spoken words.",
 ].join("\n");
 
 const SMOOTH_SYSTEM = [
@@ -39,8 +53,21 @@ const SMOOTH_SYSTEM = [
   "- You are given the end of the previous section and the beginning of the next one.",
   "- Rewrite ONLY the beginning of the next section so it flows naturally from the previous one.",
   "- Keep the same language, the same facts and roughly the same length.",
+  "- Do not correct the grammar and do not reword the sentences.",
+  "- Only change the opening words that are needed to make the section start correctly.",
   "- Keep the Markdown formatting of the beginning.",
   "- Output only the rewritten beginning, without any preamble or code fences.",
+].join("\n");
+
+const DETECT_SYSTEM = [
+  "You analyze a transcript excerpt to decide whether it is a dialogue between two or more people.",
+  "- A dialogue means at least two distinct people speak.",
+  "- A monologue, a lecture, a solo commentary or a reading is not a dialogue.",
+  "- Use proper names only when they are explicitly present in the title or the excerpt.",
+  "- Otherwise use stable role labels in the transcript language.",
+  "- If the excerpt is too short or too ambiguous, set likely_dialogue to null.",
+  "- Output only JSON, without code fences.",
+  "- JSON shape: {\"likely_dialogue\": true|false|null, \"confidence\": \"high\"|\"low\", \"speakers\": [{\"label\": \"...\", \"type\": \"name\"|\"role\"}]}",
 ].join("\n");
 
 const WIDTH = 80;
@@ -75,11 +102,11 @@ function isSet(value) {
   return value !== undefined && value !== null && value !== "";
 }
 
-function plannedBudget(transcript, ceiling) {
+function plannedBudget(transcript, ceiling, factor = OUTPUT_FACTOR) {
   const inputTokens = estimateTokens(transcript);
   return Math.min(
     ceiling,
-    Math.max(OUTPUT_FLOOR, Math.ceil(inputTokens * OUTPUT_FACTOR)),
+    Math.max(OUTPUT_FLOOR, Math.ceil(inputTokens * factor)),
   );
 }
 
@@ -114,12 +141,15 @@ function frontmatter(
     rawFinishReason,
     price,
     chunks,
+    likelyDialogue,
   },
 ) {
   const data = {
     source_url: job.url,
     video_title: titleForLang(job.titles, job.lang),
     generated_at: new Date().toISOString(),
+    likely_dialogue:
+      likelyDialogue === undefined ? null : likelyDialogue,
     llm: {
       model: modelId,
       chunks: chunks ?? 1,
@@ -159,6 +189,46 @@ export function emptyOutputReason({
   );
 }
 
+export function outputLimitError({
+  label = "LLM call",
+  budget,
+  ceiling,
+  usage,
+  finishReason = "length",
+  rawFinishReason,
+} = {}) {
+  const raw =
+    rawFinishReason && rawFinishReason !== finishReason
+      ? `/${rawFinishReason}`
+      : "";
+  const output = usage?.outputTokens ?? "unknown";
+  const reasoning = usage?.outputTokenDetails?.reasoningTokens ?? 0;
+  const text = usage?.outputTokenDetails?.textTokens ?? "unknown";
+  const numericBudget = Number(budget);
+  const numericCeiling = Number(ceiling);
+  const canIncrease =
+    Number.isFinite(numericBudget) &&
+    (!Number.isFinite(numericCeiling) || numericBudget < numericCeiling);
+  const noText = usage?.outputTokenDetails?.textTokens === 0;
+  const suggestion = noText
+    ? "The model spent the entire output budget on reasoning and wrote no text. Disable reasoning or use a non-reasoning model."
+    : canIncrease
+      ? `Increase --max-output-tokens (currently ${budget}, try ${
+          Number.isFinite(numericCeiling)
+            ? Math.min(numericCeiling, numericBudget * 2)
+            : numericBudget * 2
+        }) or lower the reasoning effort.`
+      : "The output budget is the model maximum; lower the reasoning effort or split the input.";
+  const error = new Error(
+    `${label} reached the output limit (finishReason=${finishReason}${raw}): ` +
+      `max_tokens=${budget ?? "unknown"}, output_tokens=${output}, ` +
+      `reasoning_tokens=${reasoning}, text_tokens=${text}. ${suggestion}`,
+  );
+  error.code = "OUTPUT_LIMIT";
+  error.usage = usage;
+  return error;
+}
+
 const isHeading = (text) => /^#{1,6}\s/.test(text);
 
 const isStructured = (text) =>
@@ -186,8 +256,41 @@ function wrapText(text) {
   return lines.join("\n");
 }
 
+const SPEAKER_LABEL = /^\*\*[^*\n]{1,80}\s?:\*\*$/;
+
+function normalizeSpeakerLabels(body) {
+  const blocks = `${body ?? ""}`.split(/\n{2,}/);
+  const out = [];
+  let pendingLabel = "";
+
+  for (const block of blocks) {
+    const text = block.trim();
+    if (!text) continue;
+
+    if (SPEAKER_LABEL.test(text)) {
+      pendingLabel = pendingLabel ? `${pendingLabel} ${text}` : text;
+      continue;
+    }
+
+    if (pendingLabel && !isHeading(text)) {
+      out.push(`${pendingLabel} ${text}`);
+      pendingLabel = "";
+      continue;
+    }
+
+    if (pendingLabel) {
+      out.push(pendingLabel);
+      pendingLabel = "";
+    }
+    out.push(text);
+  }
+
+  if (pendingLabel) out.push(pendingLabel);
+  return out.join("\n\n");
+}
+
 function hardWrap(body) {
-  return body
+  return normalizeSpeakerLabels(body)
     .split(/\n{2,}/)
     .map((block) => {
       const text = block.trim();
@@ -196,27 +299,6 @@ function hardWrap(body) {
       return wrapText(text.replace(/\s*\n\s*/g, " "));
     })
     .join("\n\n");
-}
-
-function vttToText(vtt) {
-  const lines = vtt
-    .split(/\r?\n/)
-    .map((line) => line.replace(/<[^>]*>/g, "").trim())
-    .filter(
-      (line) =>
-        line &&
-        !line.startsWith("WEBVTT") &&
-        !line.startsWith("Kind:") &&
-        !line.startsWith("Language:") &&
-        !line.includes("-->") &&
-        !/^\d+$/.test(line),
-    );
-
-  const out = [];
-  for (const line of lines) {
-    if (out[out.length - 1] !== line) out.push(line);
-  }
-  return out.join("\n");
 }
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -364,7 +446,7 @@ async function generateOnce(
     endpoint,
     debug,
   },
-  { system, prompt, maxOutputTokens, onRetry },
+  { system, prompt, maxOutputTokens, onRetry, temperature = 0.2 },
 ) {
   const totalAttempts = retryDelays.length + 1;
 
@@ -378,7 +460,7 @@ async function generateOnce(
           model,
           system,
           prompt,
-          temperature: 0.2,
+          temperature,
           ...reasoningOptions(reasoning, endpoint),
           maxOutputTokens,
           maxRetries: 0,
@@ -430,13 +512,25 @@ async function generateOnce(
   }
 }
 
+const FIDELITY_REMINDER =
+  "Keep the speaker's spoken words and word order: do not correct the grammar.";
+
 function chunkPrompt(title, transcript, index, total) {
-  if (total <= 1) return `Title: ${title}\n\nTranscript:\n${transcript}`;
+  if (total <= 1) {
+    return [
+      `Title: ${title}`,
+      "",
+      FIDELITY_REMINDER,
+      "",
+      `Transcript:\n${transcript}`,
+    ].join("\n");
+  }
   return [
     `Title: ${title}`,
     "",
     `This is part ${index + 1} of ${total} of the transcript.`,
     "Output only the Markdown body for this part, without the main title.",
+    FIDELITY_REMINDER,
     "",
     `Transcript (part ${index + 1}/${total}):`,
     transcript,
@@ -453,6 +547,120 @@ function smoothPrompt(previousTail, nextHead) {
     "",
     nextHead,
   ].join("\n");
+}
+
+const SUMMARY_MARKERS = [
+  ["interview opening", /l['’]entretien s['’]ouvre/i],
+  [
+    "journalist narration",
+    /\b(la|le) journaliste\s+(propose|demande|interroge|explique|souligne|rappelle|questionne)\b/i,
+  ],
+  [
+    "reported answer",
+    /\b(il|elle)\s+(répond|explique|souligne|rappelle|indique|précise|ajoute|décrit)\b/i,
+  ],
+  ["reported example", /\b(il|elle)\s+prend l['’]exemple\b/i],
+  ["reported view", /\b(selon|d['’]après)\s+(lui|elle)\b/i],
+];
+
+const SUMMARY_MARKER_LIMIT = 3;
+
+export function summaryMarkers(body) {
+  const text = `${body ?? ""}`;
+  return SUMMARY_MARKERS
+    .filter(([, pattern]) => pattern.test(text))
+    .map(([name]) => name);
+}
+
+export function looksLikeSummary(body) {
+  const markers = summaryMarkers(body);
+  return (
+    markers.length >= SUMMARY_MARKER_LIMIT &&
+    (markers.includes("interview opening") ||
+      markers.includes("journalist narration"))
+  );
+}
+
+const DETECT_HEAD_CHARS = 8000;
+const DETECT_TAIL_CHARS = 2000;
+
+export function detectionSample(body) {
+  const text = `${body ?? ""}`.trim();
+  const limit = DETECT_HEAD_CHARS + DETECT_TAIL_CHARS;
+  if (text.length <= limit) return text;
+  return [
+    text.slice(0, DETECT_HEAD_CHARS),
+    "",
+    "[...]",
+    "",
+    text.slice(-DETECT_TAIL_CHARS),
+  ].join("\n");
+}
+
+export function detectPrompt(title, body) {
+  return [
+    `Title: ${title}`,
+    "",
+    "Transcript excerpt:",
+    detectionSample(body),
+  ].join("\n");
+}
+
+function normalizeSpeaker(speaker) {
+  if (typeof speaker === "string") {
+    const label = speaker.trim();
+    return label ? { label, type: "role" } : null;
+  }
+  if (!speaker || typeof speaker !== "object") return null;
+  const label = `${speaker.label ?? ""}`.trim();
+  if (!label) return null;
+  return {
+    label,
+    type: speaker.type === "name" ? "name" : "role",
+  };
+}
+
+export function parseDetection(text) {
+  const cleaned = `${text ?? ""}`
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+
+  let data;
+  try {
+    data = JSON.parse(cleaned);
+  } catch {
+    return { likelyDialogue: null, confidence: "low", speakers: [] };
+  }
+
+  return {
+    likelyDialogue:
+      typeof data.likely_dialogue === "boolean" ? data.likely_dialogue : null,
+    confidence: data.confidence === "high" ? "high" : "low",
+    speakers: Array.isArray(data.speakers)
+      ? data.speakers.map(normalizeSpeaker).filter(Boolean)
+      : [],
+  };
+}
+
+async function detectDialogue(ctx, { title, body, onRetry }) {
+  const result = await generateOnce(ctx, {
+    system: DETECT_SYSTEM,
+    prompt: detectPrompt(title, body),
+    maxOutputTokens: 1024,
+    temperature: 0,
+    onRetry,
+  });
+  return {
+    ...parseDetection(result.text),
+    usage: result.usage,
+    elapsed: result.elapsed,
+    cost: result.cost,
+    price: result.price,
+    finishReason: result.finishReason,
+    rawFinishReason: result.rawFinishReason,
+  };
 }
 
 function sumUsage(usages) {
@@ -550,10 +758,13 @@ async function toMarkdown(
   let cost = 0;
   let costKnown = true;
   let price = null;
+  let failedBudget = null;
+  let failedUsage = null;
 
   await Promise.all(
     parts.map(async (part, index) => {
       onProgress?.(index + 1, total);
+      const budget = budgetForPart(part, { maxOutputTokens, ceiling });
       const result = await generateOnce(
         {
           model,
@@ -568,7 +779,8 @@ async function toMarkdown(
         {
           system: SYSTEM,
           prompt: chunkPrompt(title, part, index, total),
-          maxOutputTokens: budgetForPart(part, { maxOutputTokens, ceiling }),
+          maxOutputTokens: budget,
+          temperature: 0,
           onRetry,
         },
       );
@@ -584,6 +796,8 @@ async function toMarkdown(
       if (result.finishReason !== "stop" && finishReason === "stop") {
         finishReason = result.finishReason;
         rawFinishReason = result.rawFinishReason;
+        failedBudget = budget;
+        failedUsage = result.usage;
       }
     }),
   );
@@ -609,6 +823,7 @@ async function toMarkdown(
           system: SMOOTH_SYSTEM,
           prompt: smoothPrompt(previousTail, nextHead),
           maxOutputTokens: plannedBudget(nextHead, budgetCeiling),
+          temperature: 0,
           onRetry,
         },
       );
@@ -646,6 +861,8 @@ async function toMarkdown(
     chunks: total,
     cost: costKnown ? cost : null,
     price,
+    maxTokens: failedBudget,
+    failedUsage,
   };
 }
 
@@ -666,7 +883,8 @@ export async function runGenerateMarkdown({
   model: modelId,
   endpoint,
   apiKey,
-  sessionBase,
+  session,
+  sessionBase = session,
   concurrency = 6,
   ytdlpConcurrency = 2,
   retryDelays = "10,30,60",
@@ -705,6 +923,7 @@ export async function runGenerateMarkdown({
     already: 0,
     skipped: 0,
     errors: 0,
+    detectionErrors: 0,
     failures: [],
     totalSeconds: 0,
     totalInput: 0,
@@ -837,6 +1056,8 @@ export async function runGenerateMarkdown({
             chunks,
             cost,
             price,
+            maxTokens,
+            failedUsage,
           } = await toMarkdown(
             {
               model,
@@ -873,12 +1094,26 @@ export async function runGenerateMarkdown({
           const metrics = metricsLine(modelId, usage, elapsed, cost);
 
           if (finishReason !== "stop") {
+            const error = finishReason === "length"
+              ? outputLimitError({
+                  label: "markdown generation",
+                  budget: maxTokens,
+                  ceiling,
+                  usage: failedUsage ?? usage,
+                  finishReason,
+                  rawFinishReason,
+                })
+              : new Error(
+                  `markdown generation stopped with finishReason=${finishReason}`,
+                );
+            error.usage = failedUsage ?? usage;
+            error.elapsed = elapsed;
+            error.cost = cost;
             stats.errors++;
-            stats.failures.push({
-              name,
-              reason: `finishReason=${finishReason}`,
-            });
-            task.output = `error (finishReason=${finishReason})  ${name}`;
+            stats.failures.push({ name, reason: error.message });
+            task.output = finishReason === "length"
+              ? `error (output limit reached; see failures)  ${name}`
+              : `error (${error.message})  ${name}`;
             return;
           }
 
@@ -896,6 +1131,56 @@ export async function runGenerateMarkdown({
             return;
           }
 
+          if (looksLikeSummary(body)) {
+            const markers = summaryMarkers(body);
+            throw new Error(
+              `summary-like output detected (${markers.join(", ")}); ` +
+                "pass 1 must preserve the transcript",
+            );
+          }
+
+          let likelyDialogue;
+          if (typeof job.dialogue === "boolean") {
+            likelyDialogue = job.dialogue;
+          } else if (Array.isArray(job.speakers) && job.speakers.length > 0) {
+            likelyDialogue = true;
+          } else {
+            try {
+              const detection = await detectDialogue(
+                {
+                  model,
+                  retryDelays: RETRY_DELAYS,
+                  session: videoSession(sessionBase, job),
+                  limiter,
+                  priceAt,
+                  reasoning,
+                  endpoint,
+                  debug,
+                },
+                {
+                  title: job.title,
+                  body,
+                  onRetry: (nextAttempt, totalAttempts, waitMs, error) => {
+                    task.output = `detecting dialogue, retrying in ` +
+                      `${Math.round(waitMs / 1000)}s ` +
+                      `(attempt ${nextAttempt}/${totalAttempts}) ` +
+                      `${describeCause(error)}  ${name}`;
+                  },
+                },
+              );
+              likelyDialogue = detection.likelyDialogue;
+              stats.totalSeconds += detection.elapsed;
+              stats.totalInput += detection.usage?.inputTokens ?? 0;
+              stats.totalOutput += detection.usage?.outputTokens ?? 0;
+              if (detection.cost === null) stats.costKnown = false;
+              else stats.totalCost += detection.cost;
+            } catch (error) {
+              stats.detectionErrors++;
+              likelyDialogue = null;
+              task.output = `dialogue detection failed (${error.message})  ${name}`;
+            }
+          }
+
           const front = frontmatter(job, {
             modelId,
             usage,
@@ -905,6 +1190,7 @@ export async function runGenerateMarkdown({
             rawFinishReason,
             price,
             chunks,
+            likelyDialogue,
           });
           await mkdir(dirname(md), { recursive: true });
           await writeFile(
@@ -912,7 +1198,12 @@ export async function runGenerateMarkdown({
             `${front}# ${job.title}\n\n${hardWrap(body)}\n`,
           );
           stats.generated++;
-          task.output = `generated  ${name}  ${metrics}`;
+          const dialogueLabel = likelyDialogue === true
+            ? "dialogue"
+            : likelyDialogue === false
+              ? "monologue"
+              : "dialogue?";
+          task.output = `generated  ${name}  ${dialogueLabel}  ${metrics}`;
         } catch (error) {
           stats.errors++;
           stats.failures.push({ name, reason: error.message });
@@ -933,7 +1224,10 @@ export async function runGenerateMarkdown({
   }).run();
 
   console.error(
-    `summary: ${stats.generated} generated, ${stats.already} already generated, ${stats.skipped} skipped, ${stats.errors} error`,
+    `summary: ${stats.generated} generated, ${stats.already} already generated, ${stats.skipped} skipped, ${stats.errors} error` +
+      (stats.detectionErrors > 0
+        ? `, ${stats.detectionErrors} dialogue detection error(s)`
+        : ""),
   );
   const seconds = stats.totalSeconds.toFixed(1);
   console.error(
@@ -958,8 +1252,15 @@ export {
   cleanBody,
   createLimiter,
   DEFAULT_REASONING,
+  detectDialogue,
   estimateCost,
+  forEachConcurrent,
+  frontmatter,
+  generateOnce,
+  hardWrap,
   metricsLine,
+  normalizeSpeakerLabels,
+  parseRetryDelays,
   plannedBudget,
   smoothPrompt,
   sumUsage,

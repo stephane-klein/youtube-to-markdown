@@ -11,10 +11,11 @@ import {
 
 const MARKER = /^(.*)\.([^.]+)\.vtt\.missing$/;
 const VTT = /^(.*)\.([^.]+)\.vtt$/;
+const DIALOGUE = /^(.*)\.([^.]+)\.dialogue\.md$/;
 const MD = /^(.*)\.([^.]+)\.md$/;
 
 function prefixOf(name) {
-  for (const pattern of [MARKER, VTT, MD]) {
+  for (const pattern of [DIALOGUE, MARKER, VTT, MD]) {
     const match = pattern.exec(name);
     if (match) return match[1];
   }
