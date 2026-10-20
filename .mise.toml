@@ -1,5 +1,5 @@
 [env]
-_.source = ".secret.sh"
+_.source = { path = ".secret.sh", tools = true }
 
 [[hooks.enter]]
 shell = "zsh"
