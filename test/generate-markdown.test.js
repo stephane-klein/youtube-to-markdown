@@ -14,6 +14,7 @@ import {
   emptyOutputReason,
   estimateCost,
   frontmatter,
+  jobAuthors,
   looksLikeSummary,
   metricsLine,
   normalizeSpeakerLabels,
@@ -363,6 +364,65 @@ test("frontmatter writes null when dialogue detection is unknown", () => {
     },
   );
   assert.match(output, /likely_dialogue: null/);
+});
+
+test("frontmatter copies authors and the published date", () => {
+  const output = frontmatter(
+    {
+      url: "https://example.com/video",
+      titles: { fr: "Title" },
+      lang: "fr",
+      authors: ["Lê Nguyên Hoang"],
+      publishedDate: "2016-07-14",
+    },
+    {
+      modelId: "mimo-v2.5",
+      usage: usage(10, 5),
+      elapsed: 1.2,
+      cost: 0.001,
+      finishReason: "stop",
+      rawFinishReason: "stop",
+      price: null,
+      chunks: 1,
+      likelyDialogue: false,
+    },
+  );
+  assert.match(output, /^authors:\n {2}- Lê Nguyên Hoang$/m);
+  assert.match(output, /^original_published_date: 2016-07-14$/m);
+  assert.ok(output.indexOf("generated_at:") < output.indexOf("authors:"));
+  assert.ok(
+    output.indexOf("authors:") < output.indexOf("original_published_date:"),
+  );
+});
+
+test("frontmatter writes an empty authors list when none is set", () => {
+  const output = frontmatter(
+    { url: "https://example.com/video", titles: { fr: "Title" }, lang: "fr" },
+    {
+      modelId: "mimo-v2.5",
+      usage: usage(10, 5),
+      elapsed: 1.2,
+      cost: 0.001,
+      finishReason: "stop",
+      rawFinishReason: "stop",
+      price: null,
+      chunks: 1,
+      likelyDialogue: false,
+    },
+  );
+  assert.match(output, /^authors: \[\]$/m);
+  assert.equal(output.includes("original_published_date"), false);
+});
+
+test("jobAuthors prefers the video list over the channel list", () => {
+  assert.deepEqual(jobAuthors({ authors: ["A"] }, { authors: ["B"] }), ["A"]);
+  assert.deepEqual(jobAuthors({}, { authors: ["B"] }), ["B"]);
+  assert.deepEqual(jobAuthors({}, {}), []);
+});
+
+test("jobAuthors rejects malformed author lists", () => {
+  assert.throws(() => jobAuthors({ authors: "A" }, {}), /authors must be/);
+  assert.throws(() => jobAuthors({ authors: [""] }, {}), /authors must be/);
 });
 
 test("looksLikeSummary detects third-person reported speech", () => {

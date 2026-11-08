@@ -204,6 +204,8 @@ feed:
   - title: Science4All
     folder_slug: science-4-all
     url: https://www.youtube.com/@le_science4all
+    authors:
+      - Lê Nguyên Hoang
     videos:
       - title:
           fr: Pourquoi π est-il si fou ? Relativité 1
@@ -429,6 +431,9 @@ Each generated file starts with a YAML frontmatter describing the run:
 source_url: https://www.youtube.com/watch?v=PxRPpdzmbUQ
 video_title: Pourquoi π est-il si fou ? Relativité 1
 generated_at: 2026-09-19T10:12:33.456Z
+authors:
+  - Lê Nguyên Hoang
+original_published_date: 2016-02-12
 likely_dialogue: false
 llm:
   model: mimo-v2.5
@@ -448,6 +453,9 @@ llm:
 ---
 ```
 
+`authors` copies the `authors` list of the feed entry and stays `[]` when the
+entry has none; a video can override it with its own `authors` field.
+`original_published_date` is the video's `date` from the feed.
 `video_title` is the original video title in the file's language,
 `generated_at` is the UTC time of the generation and `likely_dialogue` records
 whether the text looks like a dialogue between two or more people (`null` when

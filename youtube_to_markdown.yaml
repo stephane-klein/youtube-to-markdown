@@ -9,6 +9,8 @@ feed:
   - title: Science4All
     folder_slug: science-4-all
     url: https://www.youtube.com/@le_science4all
+    authors:
+      - Lê Nguyên Hoang
     videos:
       - title:
           fr: Pourquoi π est-il si fou ? Relativité 1
@@ -1974,6 +1976,8 @@ feed:
         date: 2026-04-28
         url: https://www.youtube.com/watch?v=b2B8Wi6vdf4
   - title: MrPhi
+    authors:
+      - Thibaut Giraud
     folder_slug: mr-phi
     url: https://www.youtube.com/@MonsieurPhi
     videos:
@@ -3221,6 +3225,8 @@ feed:
         url: https://www.youtube.com/watch?v=cHmLvkvLKKI
   - title: David Cayla
     folder_slug: david-cayla
+    authors:
+      - David Cayla
     url: https://www.youtube.com/@davidcayla49
     videos:
       - title:

@@ -130,6 +130,17 @@ function metricsLine(modelId, usage, elapsed, cost) {
     .join("  ");
 }
 
+function jobAuthors(video, channel) {
+  const authors = video.authors ?? channel.authors ?? [];
+  if (
+    !Array.isArray(authors) ||
+    authors.some((author) => typeof author !== "string" || !author.trim())
+  ) {
+    throw new Error("authors must be an array of non-empty strings");
+  }
+  return authors;
+}
+
 function frontmatter(
   job,
   {
@@ -148,6 +159,8 @@ function frontmatter(
     source_url: job.url,
     video_title: titleForLang(job.titles, job.lang),
     generated_at: new Date().toISOString(),
+    authors: job.authors ?? [],
+    original_published_date: job.publishedDate || undefined,
     likely_dialogue:
       likelyDialogue === undefined ? null : likelyDialogue,
     llm: {
@@ -913,7 +926,14 @@ export async function runGenerateMarkdown({
   const jobs = feed.flatMap((channel) =>
     (channel.videos ?? [])
       .filter((video) => video.generate_markdown)
-      .flatMap((video) => videoJobs(video, dir, channel.folder_slug)),
+      .flatMap((video) => {
+        const authors = jobAuthors(video, channel);
+        return videoJobs(video, dir, channel.folder_slug).map((job) => ({
+          ...job,
+          authors,
+          publishedDate: video.date,
+        }));
+      }),
   );
 
   console.error(`${jobs.length} markdown(s) to generate with ${modelId}`);
@@ -1258,6 +1278,7 @@ export {
   frontmatter,
   generateOnce,
   hardWrap,
+  jobAuthors,
   metricsLine,
   normalizeSpeakerLabels,
   parseRetryDelays,
