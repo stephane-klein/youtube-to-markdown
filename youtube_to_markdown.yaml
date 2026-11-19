@@ -381,6 +381,7 @@ feed:
           fr: true
       - title:
           fr: Nos démocraties divisent | Démocratie 2
+          en: Our democracies divide | Democracy 2
         date: 2017-03-06
         url: https://www.youtube.com/watch?v=UIQki2ETZhY
       - title:
@@ -402,6 +403,7 @@ feed:
         url: https://www.youtube.com/watch?v=wKimU8jy2a8
       - title:
           fr: Les maths du scrutin de Condorcet randomisé 🌶️ 🌶️
+          en: The Math Behind Randomized Condorcet Voting 🌶️ 🌶️
         date: 2017-03-30
         url: https://www.youtube.com/watch?v=vAdGZkXhlNM
       - title:
@@ -451,6 +453,7 @@ feed:
         url: https://www.youtube.com/watch?v=7c7wiAaZiI8
       - title:
           fr: Argent, risques et paradoxes | Démocratie 12
+          en: Money, Risk, and Paradoxes | Democracy 12
         date: 2017-05-15
         url: https://www.youtube.com/watch?v=k3N5BsKmvg0
       - title:
@@ -510,6 +513,7 @@ feed:
         url: https://www.youtube.com/watch?v=FjP5JMUVXxw
       - title:
           fr: Le déchiffrage d'Enigma | Hors-série 2 (Conférence Alkindi ft. Razvan Barbulescu)
+          en: The Deciphering of Enigma | Special Issue 2 (Alkindi Conference ft. Razvan Barbulescu)
         date: 2017-07-06
         url: https://www.youtube.com/watch?v=Ad5cReHm4Mw
       - title:
@@ -772,6 +776,7 @@ feed:
         url: https://www.youtube.com/watch?v=Z2kqh--pItQ
       - title:
           fr: L'IA sait-elle lire ? Intelligence Artificielle 21
+          en: Can AI Read? Artificial Intelligence 21
         date: 2018-04-30
         url: https://www.youtube.com/watch?v=L_LpNAXmrJk
       - title:
@@ -848,7 +853,8 @@ feed:
         date: 2018-07-23
         url: https://www.youtube.com/watch?v=xU7LcNRkmfU
       - title:
-          fr: L'IA face aux défis environnementaux | Intelligence Artificielle 34 (ft. @lereveilleur)
+          fr: L'IA face aux défis environnementaux | Intelligence Artificielle 34 (ft. @Le Réveilleur)
+          en: AI vs. Environmental Challenges | Artificial Intelligence 34 (ft. @lereveilleur)
         date: 2018-07-30
         url: https://www.youtube.com/watch?v=eh56oSanAoI
       - title:
@@ -978,10 +984,12 @@ feed:
         url: https://www.youtube.com/watch?v=X0gYOzxua64
       - title:
           fr: "AAAI : l'une des plus grosses confs en IA !! My4Cents (Hawaï)"
+          en: "AAAI: One of the Biggest AI Conferences!! My4Cents (Hawaii)"
         date: 2019-02-21
         url: https://www.youtube.com/watch?v=T29CHUmmuOs
       - title:
           fr: "Julia Galef vs Nicolas Martin #DébattonsMieux"
+          en: "Julia Galef vs. Nicolas Martin #DebateBetter"
         date: 2019-02-25
         url: https://www.youtube.com/watch?v=zW_FJnuz8Xg
       - title:
@@ -1137,6 +1145,7 @@ feed:
         url: https://www.youtube.com/watch?v=Pgvk1jfI1G8
       - title:
           fr: La parapsychologie est TROP scientifique
+          en: Parapsychology is TOO scientific
         date: 2019-07-08
         url: https://www.youtube.com/watch?v=jdkhjkKAjyM
       - title:
@@ -1519,6 +1528,7 @@ feed:
         url: https://www.youtube.com/watch?v=F-Iy1GcqjyQ
       - title:
           fr: Le problème de l'induction
+          en: The Problem of Induction
         date: 2020-10-05
         url: https://www.youtube.com/watch?v=ptJm_otaR5k
       - title:
@@ -1554,6 +1564,7 @@ feed:
         url: https://www.youtube.com/watch?v=K15Z-GcGIhU
       - title:
           fr: Le démon de Solomonoff 🌶️
+          en: Solomonoff's Demon 🌶️
         date: 2020-11-30
         url: https://www.youtube.com/watch?v=6N0dlorL0r8
       - title:
@@ -1631,10 +1642,12 @@ feed:
         url: https://www.youtube.com/watch?v=UWzfCuHUeF4
       - title:
           fr: Les données manipulent les algorithmes
+          en: Data Manipulates Algorithms
         date: 2021-04-05
         url: https://www.youtube.com/watch?v=vYb3rB0jU70
       - title:
           fr: La déraisonnable efficacité du bayésianisme pragmatique
+          en: The Unreasonable Effectiveness of Pragmatic Bayesianism
         date: 2021-04-12
         url: https://www.youtube.com/watch?v=ZCMXgs5SB8w
       - title:
@@ -1743,10 +1756,6 @@ feed:
         date: 2022-04-04
         url: https://www.youtube.com/watch?v=HB2J0MMmEKA
       - title:
-          fr: "Présidentielle 2022 : Votez avec le nouveau scrutin de Tournesol !!"
-        date: 2022-04-06
-        url: https://www.youtube.com/watch?v=kQ--uAxcxYQ
-      - title:
           fr: Mon amie Ukrainienne supplie les scientifiques d'aider
         date: 2022-04-11
         url: https://www.youtube.com/watch?v=zPTTxsdtI3A
@@ -1774,11 +1783,6 @@ feed:
         date: 2022-09-05
         url: https://www.youtube.com/watch?v=sGLiSLAlwrY
       - title:
-          fr: Si t'étais l'algorithme de YouTube...
-          en: If you were the YouTube algorithm...
-        date: 2022-10-06
-        url: https://www.youtube.com/watch?v=nyGrd6w65Ao
-      - title:
           fr: Google a empoisonné la communauté scientifique, qui amplifie maintenant sa désinformation
         date: 2022-10-17
         url: https://www.youtube.com/watch?v=IVqXKP91L4E
@@ -1804,11 +1808,6 @@ feed:
         date: 2023-01-23
         url: https://www.youtube.com/watch?v=QprkRP-Dylo
       - title:
-          fr: "Le 1er #hackathon sur les données Tournesol !!"
-          en: "The 1st #hackathon for Tournesol data!!"
-        date: 2023-02-24
-        url: https://www.youtube.com/watch?v=GRMWy6sjmA8
-      - title:
           fr: La faille informatique qui a fait crasher deux Boeing 737 MAX
           en: The software flaw that caused two Boeing 737 MAX crashes
         date: 2023-03-06
@@ -1824,6 +1823,7 @@ feed:
         url: https://www.youtube.com/watch?v=iy2RZbq7Kn4
       - title:
           fr: Les maths des IA démocratiques 🌶️ 🌶️
+          en: The Math Behind Democratic AI 🌶️ 🌶️
         date: 2023-05-18
         url: https://www.youtube.com/watch?v=RW1zX00L1jY
       - title:
@@ -1904,10 +1904,6 @@ feed:
           fr: P vs NP vs IP vs SNARK
         date: 2024-10-14
         url: https://www.youtube.com/watch?v=Sbh3-EHgawI
-      - title:
-          fr: Participez à une prochaine vidéo !
-        date: 2024-10-21
-        url: https://www.youtube.com/watch?v=iCTIma_n3oM
       - title:
           fr: À quoi ressemble ChatGPT ? 🌶️
         date: 2024-10-29
@@ -2440,6 +2436,7 @@ feed:
         url: https://www.youtube.com/watch?v=J1zCeYXMtNs
       - title:
           fr: Conférence sur la SUPER-INTELLIGENCE + quelques suppléments
+          en: Conference on SUPERINTELLIGENCE + some extras
         date: 2018-05-20
         url: https://www.youtube.com/watch?v=frG47p887BE
       - title:
@@ -2567,6 +2564,7 @@ feed:
         url: https://www.youtube.com/watch?v=meNQnNqHjes
       - title:
           fr: En apprenant à être moi | Greg Egan
+          en: Learning to Be Me | Greg Egan
         date: 2019-01-02
         url: https://www.youtube.com/watch?v=d1znpwDI9IU
       - title:
@@ -2619,14 +2617,17 @@ feed:
         url: https://www.youtube.com/watch?v=ayyrtMdPyi4
       - title:
           fr: "DÉFINIR « DÉFINIR » | Grain de philo #26"
+          en: 'DEFINING "DEFINING" | Grain de philo #26'
         date: 2019-06-02
         url: https://www.youtube.com/watch?v=U6EP2ecu2As
       - title:
           fr: BAC PHILO - Comment réviser sur YouTube ?
+          en: PHILOSOPHY BAC - How to study on YouTube?
         date: 2019-06-06
         url: https://www.youtube.com/watch?v=YVLDNh-XDhg
       - title:
           fr: BAC Philosophie "La pluralité des cultures fait-elle obstacle à l'unité du genre humain ?"
+          en: 'Baccalaureate Philosophy: "Does the plurality of cultures stand in the way of the unity of the hu...'
         date: 2019-06-17
         url: https://www.youtube.com/watch?v=FHTw_R9M8Mg
       - title:
@@ -2846,11 +2847,6 @@ feed:
         date: 2021-06-13
         url: https://www.youtube.com/watch?v=86IqLbDrs50
       - title:
-          fr: "Bac Philo - CORRIGÉ en 1 minute (c'était facile) | #Shorts"
-          en: "Bac Philo - Answers in 1 minute (it was easy) | #Shorts"
-        date: 2021-06-20
-        url: https://www.youtube.com/watch?v=kX6wJ6P8vhE
-      - title:
           fr: Orwell avait-il tout prévu ? 👁️👁️
           en: Did Orwell foresee everything? 👁️👁️
         date: 2021-06-27
@@ -2892,15 +2888,6 @@ feed:
         date: 2021-11-13
         url: https://www.youtube.com/watch?v=LKJJpvdqkFA
       - title:
-          fr: "Y a-t-il de VRAIES couleurs ? | #Shorts"
-          en: "Are there any REAL colors? | #Shorts"
-        date: 2021-11-18
-        url: https://www.youtube.com/watch?v=KP56Vpzar2U
-        download_vtt:
-          fr: true
-        generate_markdown:
-          fr: true
-      - title:
           fr: "Une expérience de pensée renversante : l'argument du spectre inversé 🟥🟧🟨🟩🟦🟪"
           en: What do I see ? | The inverted spectrum argument
         date: 2021-12-05
@@ -2914,15 +2901,6 @@ feed:
           en: Talking about SCIENCE AND CONSCIOUSNESS with @DirtyBiology and it's a wonderful mess
         date: 2022-01-16
         url: https://www.youtube.com/watch?v=0reBHYw50mk
-      - title:
-          fr: "Une action peut-elle être PIRE parce qu'elle est BÉNÉFIQUE ? #shorts"
-          en: "Can an action be WORSE because it is BENEFICIAL? #shorts"
-        date: 2022-01-27
-        url: https://www.youtube.com/watch?v=mKte5W9zmbs
-        download_vtt:
-          fr: true
-        generate_markdown:
-          fr: true
       - title:
           fr: Socrate, l'homme qui en savait trop peu
           en: Socrates, the man who knew too little
@@ -2947,34 +2925,14 @@ feed:
         date: 2022-04-05
         url: https://www.youtube.com/watch?v=zmCl5i_sEiM
       - title:
-          fr: "[Sondage] Que savez-vous ?"
-          en: "[Poll] What do you know?"
-        date: 2022-04-12
-        url: https://www.youtube.com/watch?v=0jcphhIULxU
-      - title:
-          fr: Mon livre est réédité en format poche ! (et du coup je suis content)
-          en: My book is being reissued in paperback! (and so I'm happy)
-        date: 2022-05-06
-        url: https://www.youtube.com/watch?v=Gfm6Sk6LxjE
-      - title:
           fr: LA SCIENCE EST UNE CROYANCE (si c'est vrai c'est très grave) | Quelques bases en épistémologie
         date: 2022-05-08
         url: https://www.youtube.com/watch?v=YQ_qr-LA3AU
-      - title:
-          fr: "[Sondage] La philo en Terminale : qu'en reste-t-il ?"
-          en: "[Survey] Philosophy in the final year of high school: what remains of it?"
-        date: 2022-05-18
-        url: https://www.youtube.com/watch?v=8_6cu9zy08U
       - title:
           fr: Qu'avez-vous détesté en philo ? (Et pourquoi Freud ?)
           en: What did you hate about philosophy? (And why Freud?)
         date: 2022-06-03
         url: https://www.youtube.com/watch?v=XH0R8r8-fSk
-      - title:
-          fr: "J'ai retrouvé ma copie du bac de philo (20/20 facile) #shorts"
-          en: "I found my copy of the philosophy exam (20/20 easy) #shorts"
-        date: 2022-06-13
-        url: https://www.youtube.com/watch?v=WJDcZwoCMmw
       - title:
           fr: Pourquoi nous vous mangeons 👽
           en: The best reason to eat your brains 👽🍴🧠 A gastronomic thought experiment
@@ -3005,11 +2963,6 @@ feed:
         date: 2022-10-30
         url: https://www.youtube.com/watch?v=ih9TRJQbLeg
       - title:
-          fr: "Quand Diogène croise Platon sur un tournage. #shorts"
-          en: "When Diogenes meets Plato on a set. #shorts"
-        date: 2022-11-11
-        url: https://www.youtube.com/watch?v=zMGntvq0MQk
-      - title:
           fr: Le plus terrifiant dans 1984... est une idée philosophique. | 2+2=5
           en: The most terrifying thing about 1984... is a philosophical idea. | 2+2=5
         date: 2022-12-04
@@ -3028,10 +2981,6 @@ feed:
           en: Doing math or dissecting octopuses | Plato vs. Aristotle
         date: 2023-03-05
         url: https://www.youtube.com/watch?v=4Rcs2gAzKbY
-      - title:
-          fr: Platon présente l'allégorie de la caverne
-        date: 2023-03-12
-        url: https://www.youtube.com/watch?v=yJD4a4tbdWE
       - title:
           fr: Je teste votre imagination... Les résultats sont surprenants!
           en: I'm testing your imagination... The results are surprising!
@@ -3087,16 +3036,8 @@ feed:
         date: 2024-01-14
         url: https://www.youtube.com/watch?v=zf0KkTpiUzc
       - title:
-          fr: Le plus gros cas de plagiat de la vulga francophone
-          en: The biggest case of plagiarism in the French-speaking vulga
-        date: 2024-02-03
-        url: https://www.youtube.com/watch?v=rG3r_5a_E5Y
-      - title:
-          fr: CrazyGPT
-        date: 2024-02-21
-        url: https://www.youtube.com/watch?v=H7jADeJpIGU
-      - title:
           fr: Une expérience de philosophie morale
+          en: A Moral Philosophy Experiment
         date: 2024-02-27
         url: https://www.youtube.com/watch?v=GJAQCRJZmic
         download_vtt:
@@ -3109,11 +3050,6 @@ feed:
         date: 2024-04-14
         url: https://www.youtube.com/watch?v=6D1XIbkm4JE
       - title:
-          fr: Brel comme vous ne l'avez jamais entendu
-          en: Brel as you've never heard him before
-        date: 2024-04-30
-        url: https://www.youtube.com/watch?v=_FjlbgtDI2o
-      - title:
           fr: "Enthoven vs. ChatGPT : QUI EST L'IMPOSTEUR ?"
           en: "Enthoven vs. ChatGPT: WHO IS THE IMPOSTER?"
         date: 2024-06-16
@@ -3124,7 +3060,7 @@ feed:
         date: 2024-07-05
         url: https://www.youtube.com/watch?v=67u8B2PFRXM
       - title:
-          fr: "Quand la science répond à la question : nos IA sont-elles conscientes ?"
+          fr: "IA consciente : ce que les sciences peuvent (ou non) nous en dire"
           en: "When science answers the question: are our AIs conscious?"
         date: 2024-09-08
         url: https://www.youtube.com/watch?v=j2zv4jlo2Nw
@@ -3223,6 +3159,11 @@ feed:
           en: Everything we know about ancient philosophy could soon change radically
         date: 2026-08-14
         url: https://www.youtube.com/watch?v=cHmLvkvLKKI
+      - title:
+          fr: Généalogie des grands modèles de langage
+          en: Genealogy of Large Language Models
+        date: 2026-10-10
+        url: https://www.youtube.com/watch?v=PUxgpy81Cnc
   - title: David Cayla
     folder_slug: david-cayla
     authors:
@@ -3231,6 +3172,7 @@ feed:
     videos:
       - title:
           fr: Les origines de la crise économique européenne de 2010-2013.
+          en: The Origins of the European Economic Crisis of 2010-2013
         date: 2019-06-19
         url: https://www.youtube.com/watch?v=nurQ-jxwM7s
         download_vtt:
@@ -3279,6 +3221,7 @@ feed:
           fr: true
       - title:
           fr: Séance 4 (fin)
+          en: Session 4 (end)
         date: 2020-11-01
         url: https://www.youtube.com/watch?v=Z4_abc1lv6o
         download_vtt:
@@ -3355,6 +3298,7 @@ feed:
           fr: true
       - title:
           fr: Séance 10 du 21 octobre
+          en: Session 10 of October 21
         date: 2020-11-01
         url: https://www.youtube.com/watch?v=rNm2RV4b_Es
         download_vtt:
@@ -3817,6 +3761,7 @@ feed:
         url: https://www.youtube.com/watch?v=mSBfQIoeFr4
       - title:
           fr: Discussion avec Georges Kuzmanovic (République souveraine)
+          en: Discussion with Georges Kuzmanovic (Sovereign Republic)
         date: 2024-10-19
         url: https://www.youtube.com/watch?v=mPjPbUHaPKU
       - title:
@@ -3838,6 +3783,7 @@ feed:
         url: https://www.youtube.com/watch?v=thKKnbjp6Vg
       - title:
           fr: Les principes du néolibéralisme face à la crise écologique
+          en: The Principles of Neoliberalism Faced with the Ecological Crisis
         date: 2025-03-01
         url: https://www.youtube.com/watch?v=DHhtLleFA8c
       - title:

@@ -170,7 +170,9 @@ $ youtube-to-markdown extract-video-metadata
 summary: 2 sources, 2678 videos, 2m 05s elapsed
 ```
 
-The command is idempotent: a new run only adds the missing videos.
+The command is idempotent: a new run only adds the missing videos. YouTube
+Shorts are never added; a short already present in the file is removed on the
+next run.
 
 **5. Generate the Markdown** with `download-vtt`, then `generate-markdown`. The
 other commands are `markdown-stats`, `reorganize` and `doctor`; run

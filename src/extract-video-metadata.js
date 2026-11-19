@@ -12,12 +12,12 @@ const toIso = (raw) =>
     ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
     : "";
 
-async function ytDlp(args, { allowFailure = false } = {}) {
-  const { stdout } = await runYtDlp(args, { stderr: "inherit", allowFailure });
+async function ytDlp(args, { allowFailure = false, stderr = "inherit" } = {}) {
+  const { stdout } = await runYtDlp(args, { stderr, allowFailure });
   return stdout;
 }
 
-async function uploadsPlaylistUrl(channelUrl) {
+async function channelIdOf(channelUrl) {
   const out = await ytDlp([
     "--flat-playlist",
     "--playlist-end",
@@ -32,8 +32,14 @@ async function uploadsPlaylistUrl(channelUrl) {
     throw new Error(`ID de chaîne introuvable pour ${channelUrl}`);
   }
 
-  return `https://www.youtube.com/playlist?list=UU${channelId.slice(2)}`;
+  return channelId;
 }
+
+const uploadsPlaylistUrl = (channelId) =>
+  `https://www.youtube.com/playlist?list=UU${channelId.slice(2)}`;
+
+const shortsPlaylistUrl = (channelId) =>
+  `https://www.youtube.com/playlist?list=UUSH${channelId.slice(2)}`;
 
 const isPlaylistUrl = (url) => {
   try {
@@ -47,7 +53,7 @@ async function listEntries(playlistUrl, lang) {
   const args = [
     "--flat-playlist",
     "-O",
-    '{"titre": %(title)j, "url": %(webpage_url)j, "playlist": %(playlist_title)j, "index": %(playlist_index)j}',
+    '{"id": %(id)j, "titre": %(title)j, "url": %(webpage_url)j, "playlist": %(playlist_title)j, "index": %(playlist_index)j, "channel": "%(channel_id)s"}',
     "--extractor-args",
     `youtube:lang=${lang}`,
   ];
@@ -60,7 +66,30 @@ async function listEntries(playlistUrl, lang) {
     .map((line) => JSON.parse(line));
 }
 
-const videoId = (url) => /[?&]v=([\w-]+)/.exec(url)?.[1] ?? url;
+const videoId = (url) =>
+  /[?&]v=([\w-]+)/.exec(url)?.[1] ??
+  /\/shorts\/([\w-]+)/.exec(url)?.[1] ??
+  url;
+
+const isShortUrl = (url) =>
+  typeof url === "string" && url.includes("/shorts/");
+
+export const isShort = (url, shortIds) =>
+  isShortUrl(url) || shortIds.has(videoId(url));
+
+async function fetchShortIds(channelId, cache) {
+  if (cache.has(channelId)) return cache.get(channelId);
+
+  const out = await ytDlp(
+    ["--flat-playlist", "-O", "%(id)s", shortsPlaylistUrl(channelId)],
+    { allowFailure: true, stderr: "ignore" },
+  );
+  const ids = new Set(
+    out.split("\n").map((line) => line.trim()).filter(Boolean),
+  );
+  cache.set(channelId, ids);
+  return ids;
+}
 
 async function fetchExactDates(urls) {
   const dates = new Map();
@@ -99,15 +128,28 @@ async function fetchExactDates(urls) {
   return dates;
 }
 
-async function fetchVideos(sourceUrl, knownDates) {
+async function fetchVideos(sourceUrl, knownDates, shortsCache) {
   const playlist = isPlaylistUrl(sourceUrl);
-  const playlistUrl = playlist ? sourceUrl : await uploadsPlaylistUrl(sourceUrl);
+  const channelId = playlist ? "" : await channelIdOf(sourceUrl);
+  const playlistUrl = playlist ? sourceUrl : uploadsPlaylistUrl(channelId);
   const en = await listEntries(playlistUrl, "en");
   const fr = await listEntries(playlistUrl, "fr");
   const frTitles = new Map(fr.map((entry) => [entry.url, entry.titre]));
 
+  const channelIds = new Set(
+    en
+      .map((entry) => entry.channel)
+      .filter((id) => typeof id === "string" && id.startsWith("UC")),
+  );
+  if (channelId) channelIds.add(channelId);
+
+  const shortSets = await Promise.all(
+    [...channelIds].map((id) => fetchShortIds(id, shortsCache)),
+  );
+  const shortIds = new Set(shortSets.flatMap((ids) => [...ids]));
+
   const videos = en
-    .filter((entry) => !entry.url.includes("/shorts/"))
+    .filter((entry) => !isShort(entry.url, shortIds))
     .map((entry) => {
       const enTitle = entry.titre.trim();
       const frTitle = (frTitles.get(entry.url) ?? enTitle).trim();
@@ -121,6 +163,9 @@ async function fetchVideos(sourceUrl, knownDates) {
       if (playlist && Number.isInteger(entry.index)) video.index = entry.index;
       return video;
     });
+
+  const skipped = en.length - videos.length;
+  if (skipped > 0) console.error(`  ${count(skipped, "short")} skipped`);
 
   const missing = videos
     .filter((video) => !knownDates.has(videoId(video.url)))
@@ -139,6 +184,7 @@ async function fetchVideos(sourceUrl, knownDates) {
   return {
     title: playlist ? (en[0]?.playlist ?? "") : "",
     playlist,
+    shortIds,
     videos: ordered.map((video) => {
       const fields = { title: video.title, date: video.date, url: video.url };
       return video.index !== undefined
@@ -191,6 +237,7 @@ export async function runExtract({
   forceDates = false,
 } = {}) {
   const startedAt = performance.now();
+  const shortsCache = new Map();
   let sourceCount = 0;
   let videoCount = 0;
 
@@ -207,11 +254,15 @@ export async function runExtract({
           .map((video) => [videoId(video.url), video.date]),
       );
     console.error(`→ ${channel.url}`);
-    const fetched = await fetchVideos(channel.url, knownDates);
+    const fetched = await fetchVideos(channel.url, knownDates, shortsCache);
     if (fetched.title && !channel.title) channel.title = fetched.title;
-    channel.videos = mergeVideos(videos, fetched.videos, {
+    const merged = mergeVideos(videos, fetched.videos, {
       sort: !fetched.playlist,
     });
+    const kept = merged.filter((video) => !isShort(video.url, fetched.shortIds));
+    const removed = merged.length - kept.length;
+    channel.videos = kept;
+    if (removed > 0) console.error(`  ${count(removed, "short")} removed`);
 
     sourceCount += 1;
     videoCount += channel.videos.length;
