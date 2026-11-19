@@ -37,3 +37,31 @@ set -euo pipefail
 npm whoami
 npm publish
 """
+
+[tasks.install-cli-to-local-bin]
+description = "Install the dev version of the CLI globally on the workstation: symlink ~/.local/bin to this checkout, for use from other projects"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p "$HOME/.local/bin"
+target="$HOME/.local/bin/youtube-to-markdown"
+if [[ -e "$target" || -L "$target" ]]; then
+  rm -f "$target"
+fi
+ln -s "{{ config_root }}/src/cli.js" "$target"
+echo "Linked $target -> $(readlink "$target")"
+"""
+
+[tasks.uninstall-cli-from-local-bin]
+description = "Uninstall the dev version of the CLI installed globally on the workstation: remove the ~/.local/bin symlink"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+target="$HOME/.local/bin/youtube-to-markdown"
+if [[ -e "$target" || -L "$target" ]]; then
+  rm -f "$target"
+  echo "Removed $target"
+else
+  echo "Nothing to remove: $target"
+fi
+"""

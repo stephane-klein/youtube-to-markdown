@@ -623,6 +623,29 @@ $ cp .secret.sh.example .secret.sh
 $ $EDITOR .secret.sh
 ```
 
+## Install the development version globally on your workstation
+
+To run the CLI from other projects while working on its source, link the checkout
+into `~/.local/bin` instead of installing the published package:
+
+```sh
+$ mise run install-cli-to-local-bin
+```
+
+Run `npm install` at the root of the repository first, because the linked script
+resolves its dependencies from `node_modules` at that root.
+
+The task symlinks `src/cli.js`, so the command runs the working tree and every edit
+is active on the next call. It creates no global package state. Remove the link
+with `mise run uninstall-cli-from-local-bin`.
+
+Inside this repository, the `youtube-to-markdown` function defined by the mise
+enter hook keeps precedence over the link. The link is for the other projects.
+
+The link sits in `~/.local/bin`, which comes before `~/.local/share/mise/shims`
+in the `PATH`: it hides the globally installed npm package until
+`mise run uninstall-cli-from-local-bin` restores it.
+
 ## Publish the package to npmjs
 
 I publish the package to npmjs from this repository with mise:
