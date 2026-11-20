@@ -20,6 +20,7 @@ import {
   normalizeSpeakerLabels,
   outputLimitError,
   parseDetection,
+  PDF_FIDELITY_REMINDER,
   plannedBudget,
   reasoningOptions,
   smoothPrompt,
@@ -73,6 +74,12 @@ test("chunkPrompt marks multi-part transcripts", () => {
   const prompt = chunkPrompt("Title", "body", 1, 3);
   assert.match(prompt, /part 2 of 3/);
   assert.match(prompt, /part 2\/3/);
+});
+
+test("chunkPrompt accepts a PDF fidelity reminder", () => {
+  const prompt = chunkPrompt("Title", "body", 0, 1, PDF_FIDELITY_REMINDER);
+  assert.match(prompt, /Keep the author's words/);
+  assert.equal(prompt.includes("spoken words"), false);
 });
 
 test("smoothPrompt exposes both sides of the junction", () => {
@@ -412,6 +419,50 @@ test("frontmatter writes an empty authors list when none is set", () => {
   );
   assert.match(output, /^authors: \[\]$/m);
   assert.equal(output.includes("original_published_date"), false);
+});
+
+test("frontmatter records a PDF transcript source", () => {
+  const output = frontmatter(
+    {
+      url: "https://example.com/video",
+      titles: { fr: "Title" },
+      lang: "fr",
+      source: "pdf",
+      pdf: "raws/test.pdf",
+    },
+    {
+      modelId: "mimo-v2.5",
+      usage: usage(10, 5),
+      elapsed: 1.2,
+      cost: 0.001,
+      finishReason: "stop",
+      rawFinishReason: "stop",
+      price: null,
+      chunks: 1,
+      likelyDialogue: false,
+    },
+  );
+  assert.match(output, /^transcript_source: pdf$/m);
+  assert.match(output, /^transcript_pdf: raws\/test\.pdf$/m);
+});
+
+test("frontmatter defaults the transcript source to VTT", () => {
+  const output = frontmatter(
+    { url: "https://example.com/video", titles: { fr: "Title" }, lang: "fr" },
+    {
+      modelId: "mimo-v2.5",
+      usage: usage(10, 5),
+      elapsed: 1.2,
+      cost: 0.001,
+      finishReason: "stop",
+      rawFinishReason: "stop",
+      price: null,
+      chunks: 1,
+      likelyDialogue: false,
+    },
+  );
+  assert.match(output, /^transcript_source: vtt$/m);
+  assert.equal(output.includes("transcript_pdf"), false);
 });
 
 test("jobAuthors prefers the video list over the channel list", () => {

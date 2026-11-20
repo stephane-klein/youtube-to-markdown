@@ -49,8 +49,16 @@ const project = (argv) => {
   for (const key of SETTING_KEYS) {
     if (argv[key] !== undefined) settings[key] = argv[key];
   }
-  const dir = resolve(dirname(argv.config), yaml.contents_path ?? "contents");
-  return { path: argv.config, config: yaml, feed: yaml.feed ?? [], settings, dir };
+  const configDir = dirname(resolve(argv.config));
+  const dir = resolve(configDir, yaml.contents_path ?? "contents");
+  return {
+    path: argv.config,
+    config: yaml,
+    feed: yaml.feed ?? [],
+    settings,
+    dir,
+    configDir,
+  };
 };
 
 const cli = yargs(hideBin(process.argv))
@@ -84,7 +92,7 @@ const cli = yargs(hideBin(process.argv))
   )
   .command(
     "generate-markdown",
-    "Turn the VTT transcripts into Markdown prose with an LLM",
+    "Turn the VTT or PDF transcripts into Markdown prose with an LLM",
     (yargs) =>
       yargs
         .option("model", {
@@ -143,11 +151,12 @@ const cli = yargs(hideBin(process.argv))
           default: false,
         }),
     handle(async (argv) => {
-      const { feed, settings, dir } = project(argv);
+      const { feed, settings, dir, configDir } = project(argv);
       await runGenerateMarkdown({
         feed,
         ...settings,
         dir,
+        configDir,
         force: argv.force,
         labelUncertain: argv.labelUncertain,
         debugLlm: argv.debugLlm,

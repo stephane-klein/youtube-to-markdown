@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, relative } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { APICallError, generateText } from "ai";
 import { Listr, ListrLogger, ProcessOutput } from "listr2";
@@ -13,6 +13,7 @@ import {
   lastBlock,
   replaceFirstBlock,
 } from "./chunk.js";
+import { extractPdfText } from "./pdf.js";
 import { loadPricing } from "./pricing.js";
 import { vttToText } from "./vtt-cues.js";
 import {
@@ -47,6 +48,27 @@ const SYSTEM = [
   "- Output only the Markdown body.",
   "- Before answering, reread your text sentence by sentence and check that no sentence has been turned into a more formal or more standard version of the spoken words.",
 ].join("\n");
+
+const PDF_SYSTEM = [
+  "You turn the written transcript of a YouTube video into readable Markdown, without rewriting it.",
+  "- The transcript comes from a PDF file provided by the publisher, not from YouTube's automatic captions.",
+  "- Write in the same language as the text.",
+  "- The PDF text is the reference text: preserve its words, sentence order and meaning.",
+  "- Do not paraphrase, summarize, correct the language or replace a turn of phrase.",
+  "- Do not add facts that are not in the text, and keep the repetitions, digressions and examples.",
+  "- The PDF extraction may contain artefacts: page numbers, running headers or footers, and words split at the end of a line.",
+  "- Remove only those artefacts and join words that a line break split apart.",
+  "- The first line often repeats the video title: do not repeat it in the body.",
+  "- Merge the short lines into full sentences and paragraphs.",
+  "- You may add section headings (##, ###) when the text clearly moves between topics.",
+  "- Do not add a main title, it is provided separately.",
+  "- Do not wrap the output in code fences.",
+  "- Output only the Markdown body.",
+  "- Before answering, reread your text sentence by sentence and check that you did not rewrite the author's sentences.",
+].join("\n");
+
+const PDF_FIDELITY_REMINDER =
+  "Keep the author's words and sentence order: do not rewrite or correct the text.";
 
 const SMOOTH_SYSTEM = [
   "You improve the transition between two consecutive Markdown sections that were written independently.",
@@ -161,6 +183,8 @@ function frontmatter(
     generated_at: new Date().toISOString(),
     authors: job.authors ?? [],
     original_published_date: job.publishedDate || undefined,
+    transcript_source: job.source ?? "vtt",
+    ...(job.source === "pdf" ? { transcript_pdf: job.pdf } : {}),
     likely_dialogue:
       likelyDialogue === undefined ? null : likelyDialogue,
     llm: {
@@ -528,12 +552,18 @@ async function generateOnce(
 const FIDELITY_REMINDER =
   "Keep the speaker's spoken words and word order: do not correct the grammar.";
 
-function chunkPrompt(title, transcript, index, total) {
+function chunkPrompt(
+  title,
+  transcript,
+  index,
+  total,
+  reminder = FIDELITY_REMINDER,
+) {
   if (total <= 1) {
     return [
       `Title: ${title}`,
       "",
-      FIDELITY_REMINDER,
+      reminder,
       "",
       `Transcript:\n${transcript}`,
     ].join("\n");
@@ -543,7 +573,7 @@ function chunkPrompt(title, transcript, index, total) {
     "",
     `This is part ${index + 1} of ${total} of the transcript.`,
     "Output only the Markdown body for this part, without the main title.",
-    FIDELITY_REMINDER,
+    reminder,
     "",
     `Transcript (part ${index + 1}/${total}):`,
     transcript,
@@ -744,6 +774,8 @@ async function toMarkdown(
     reasoning,
     endpoint,
     debug,
+    system = SYSTEM,
+    reminder = FIDELITY_REMINDER,
   },
   title,
   transcript,
@@ -790,8 +822,8 @@ async function toMarkdown(
           debug,
         },
         {
-          system: SYSTEM,
-          prompt: chunkPrompt(title, part, index, total),
+          system,
+          prompt: chunkPrompt(title, part, index, total, reminder),
           maxOutputTokens: budget,
           temperature: 0,
           onRetry,
@@ -907,6 +939,7 @@ export async function runGenerateMarkdown({
   force = false,
   debugLlm = false,
   dir = DEFAULT_DIR,
+  configDir = process.cwd(),
 } = {}) {
   const key = apiKey ?? process.env.OPENAI_API_KEY;
   if (!key) throw new Error("api key is not set (--api-key or OPENAI_API_KEY)");
@@ -924,16 +957,15 @@ export async function runGenerateMarkdown({
   await mkdir(dir, { recursive: true });
 
   const jobs = feed.flatMap((channel) =>
-    (channel.videos ?? [])
-      .filter((video) => video.generate_markdown)
-      .flatMap((video) => {
-        const authors = jobAuthors(video, channel);
-        return videoJobs(video, dir, channel.folder_slug).map((job) => ({
+    (channel.videos ?? []).flatMap((video) =>
+      videoJobs(video, dir, channel.folder_slug)
+        .filter((job) => job.generate)
+        .map((job) => ({
           ...job,
-          authors,
+          authors: jobAuthors(video, channel),
           publishedDate: video.date,
-        }));
-      }),
+        })),
+    ),
   );
 
   console.error(`${jobs.length} markdown(s) to generate with ${modelId}`);
@@ -992,7 +1024,7 @@ export async function runGenerateMarkdown({
   );
 
   const downloadTask = {
-    title: "Download transcripts",
+    title: "Prepare transcripts",
     rendererOptions: phaseOptions,
     task: async (_ctx, task) => {
       const total = jobs.length;
@@ -1005,13 +1037,15 @@ export async function runGenerateMarkdown({
       let available = 0;
       const items = [];
       for (const job of jobs) {
-        if (await exists(job.vtt)) {
+        if (job.source === "pdf") {
+          if (await exists(resolve(configDir, job.pdf))) available++;
+        } else if (await exists(job.vtt)) {
           available++;
         } else if (pendingSet.has(job)) {
           items.push(job);
         }
       }
-      task.title = `Download transcripts (${available}/${total})`;
+      task.title = `Prepare transcripts (${available}/${total})`;
 
       await forEachConcurrent(items, vttConcurrency, async (job) => {
         const name = relative(dir, `${job.base}.md`);
@@ -1039,7 +1073,7 @@ export async function runGenerateMarkdown({
           stats.errors++;
           task.output = `error (${error.message})  ${name}`;
         } finally {
-          task.title = `Download transcripts (${available}/${total})`;
+          task.title = `Prepare transcripts (${available}/${total})`;
         }
       });
     },
@@ -1051,7 +1085,8 @@ export async function runGenerateMarkdown({
     task: async (_ctx, task) => {
       const items = [];
       for (const job of pending) {
-        if (await exists(job.vtt)) items.push(job);
+        if (job.source === "pdf") items.push(job);
+        else if (await exists(job.vtt)) items.push(job);
       }
       if (items.length === 0) {
         task.skip("nothing to generate");
@@ -1065,7 +1100,19 @@ export async function runGenerateMarkdown({
         const md = `${job.base}.md`;
         const name = relative(dir, md);
         try {
-          const transcript = vttToText(await readFile(job.vtt, "utf8"));
+          let transcript;
+          if (job.source === "pdf") {
+            const pdfPath = resolve(configDir, job.pdf);
+            if (!(await exists(pdfPath))) {
+              throw new Error(`transcript PDF not found: ${job.pdf}`);
+            }
+            const extracted = await extractPdfText(pdfPath, {
+              title: job.title,
+            });
+            transcript = extracted.text;
+          } else {
+            transcript = vttToText(await readFile(job.vtt, "utf8"));
+          }
           const {
             body,
             usage,
@@ -1091,6 +1138,11 @@ export async function runGenerateMarkdown({
               reasoning,
               endpoint,
               debug,
+              system: job.source === "pdf" ? PDF_SYSTEM : SYSTEM,
+              reminder:
+                job.source === "pdf"
+                  ? PDF_FIDELITY_REMINDER
+                  : FIDELITY_REMINDER,
             },
             job.title,
             transcript,
@@ -1223,7 +1275,9 @@ export async function runGenerateMarkdown({
             : likelyDialogue === false
               ? "monologue"
               : "dialogue?";
-          task.output = `generated  ${name}  ${dialogueLabel}  ${metrics}`;
+          const sourceLabel = job.source === "pdf" ? " (pdf)" : "";
+          task.output =
+            `generated${sourceLabel}  ${name}  ${dialogueLabel}  ${metrics}`;
         } catch (error) {
           stats.errors++;
           stats.failures.push({ name, reason: error.message });
@@ -1282,6 +1336,8 @@ export {
   metricsLine,
   normalizeSpeakerLabels,
   parseRetryDelays,
+  PDF_FIDELITY_REMINDER,
+  PDF_SYSTEM,
   plannedBudget,
   smoothPrompt,
   sumUsage,

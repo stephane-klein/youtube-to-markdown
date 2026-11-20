@@ -313,11 +313,16 @@ export async function runLabelSpeakers({
   const llmConcurrency = Number(concurrency);
   const limiter = createLimiter(llmConcurrency);
 
-  const jobs = feed.flatMap((channel) =>
-    (channel.videos ?? [])
-      .filter((video) => video.generate_markdown)
-      .flatMap((video) => videoJobs(video, dir, channel.folder_slug)),
-  );
+  const jobs = [];
+  for (const channel of feed) {
+    for (const video of channel.videos ?? []) {
+      for (const job of videoJobs(video, dir, channel.folder_slug)) {
+        if (!job.generate) continue;
+        if (job.source === "pdf" && !(await exists(job.vtt))) continue;
+        jobs.push(job);
+      }
+    }
+  }
 
   const stats = {
     labeled: 0,

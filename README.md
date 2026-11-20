@@ -80,8 +80,8 @@ Commands:
   extract-video-metadata  Fetch the videos of each feed source (channel or
                           playlist) from YouTube into the configuration file
   download-vtt            Download the VTT transcripts of the marked videos
-  generate-markdown       Turn the VTT transcripts into Markdown prose with an
-                          LLM
+  generate-markdown       Turn the VTT or PDF transcripts into Markdown prose
+                          with an LLM
   label-speakers          Add speaker labels to dialogue Markdown files
   markdown-stats          Report global tokens, cost and time from the Markdown
                           frontmatter
@@ -292,10 +292,58 @@ field.
 When a video has no subtitle at all, the command writes a `<…>.vtt.missing`
 marker and stops trying. I delete that marker to force a new attempt.
 
+## Use a PDF transcript instead of the YouTube one
+
+Some channels publish a written transcript as a PDF. When I have that file, I
+prefer it to YouTube's automatic transcript. I declare it with `transcript_pdf`:
+
+```yaml
+      - title:
+          fr: "Example episode: a subtitle"
+        date: 2026-01-01
+        url: https://www.youtube.com/watch?v=example
+        generate_markdown:
+          fr: true
+        transcript_pdf:
+          fr: raws/example-channel/2026-01-01_example-episode.pdf
+```
+
+The path is relative to the YAML file. An absolute path also works. The CLI
+never downloads the PDF: I put the file in place myself.
+
+PDF text extraction uses `unpdf`, a pure JavaScript build of Mozilla PDF.js. It
+comes with the npm package, so there is no extra system dependency.
+
+`generate_markdown` remains the switch that authorises the LLM call. A
+`transcript_pdf` entry without `generate_markdown` produces no Markdown.
+
+When both `download_vtt` and `transcript_pdf` exist for the same language, the
+PDF wins for generation. `download_vtt` still controls the separate
+`download-vtt` command; `generate-markdown` does not download a VTT for a PDF
+source.
+
+If the declared PDF is missing, the generation fails with an explicit error.
+The command does not fall back to the VTT. If the PDF has no text layer (a
+scan), the command stops with an error because OCR is not supported.
+
+The generated file keeps the usual name and layout. Its frontmatter records the
+source:
+
+```yaml
+transcript_source: pdf
+transcript_pdf: raws/example-channel/2026-01-01_example-episode.pdf
+```
+
+Use `--force` to regenerate a Markdown file after I update its PDF.
+
+The labelling pass still needs a VTT for its speaker cues, so a PDF-only video
+does not produce a `.dialogue.md` file.
+
 ## Generate Markdown text from the transcripts
 
 I mark the videos I want as Markdown with `generate_markdown`. The transcript is
-downloaded first if it is not there yet:
+downloaded first if it is not there yet, or read from its PDF when
+`transcript_pdf` is set:
 
 ```yaml
     download_vtt:
@@ -316,7 +364,7 @@ Then:
 ```sh
 $ youtube-to-markdown generate-markdown
 74 markdown(s) to generate with mimo-v2.5
-✔ Download transcripts (73/74)
+✔ Prepare transcripts (73/74)
   › downloaded  2017-08-04_nietzsche-la-morale-des-winners-genealogie-de-la-morale-1-2.fr.md
   › skipped (no transcript)  2017-06-26_favoriser-l-honnetete-democratie-18.fr.md
 ✔ Generate markdown (73/74, 37 already)
@@ -346,11 +394,12 @@ excerpt of the flat text. `speakers` is optional and fixes the labels used by
 the second pass; a non-empty list also marks the video as a dialogue. `youtube-to-markdown label-speakers` reruns only the labelling
 pass on existing flat files, without regenerating the text.
 
-The command runs in three sequential phases. `Download transcripts` reports how many
-videos have a transcript (`available/total`) and fetches the missing ones, at
-most `--ytdlp-concurrency` at a time (default 2); only downloads, skips and errors
-are listed. The `Generate markdown` phase converts the transcripts into flat
-text, at most `--concurrency` at a time (default 6), reporting the number of
+The command runs in three sequential phases. `Prepare transcripts` reports how
+many videos have a transcript (`available/total`) and fetches the missing VTT
+files, at most `--ytdlp-concurrency` at a time (default 2); only downloads,
+skips and errors are listed. A PDF source is checked in the same phase and is
+never downloaded. The `Generate markdown` phase converts the transcripts into
+flat text, at most `--concurrency` at a time (default 6), reporting the number of
 up-to-date Markdown files over the whole feed (`ready/total, N already`). The
 `Label speakers` phase then labels the dialogue files. Each phase keeps only the
 last 20 events on screen, so it stays bounded even with a large feed.

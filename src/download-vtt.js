@@ -7,7 +7,9 @@ export async function runDownloadVtt({ feed = [], dir = DEFAULT_DIR } = {}) {
 
   const jobs = feed.flatMap((channel) =>
     (channel.videos ?? []).flatMap((video) =>
-      videoJobs(video, dir, channel.folder_slug),
+      videoJobs(video, dir, channel.folder_slug).filter(
+        (job) => job.downloadVtt,
+      ),
     ),
   );
 

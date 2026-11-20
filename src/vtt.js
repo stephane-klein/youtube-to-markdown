@@ -111,6 +111,41 @@ export async function downloadVtt(url, lang, dest) {
   }
 }
 
+function transcriptSources(video) {
+  if (
+    video.transcript_pdf !== undefined &&
+    video.transcript_pdf !== null &&
+    (typeof video.transcript_pdf !== "object" ||
+      Array.isArray(video.transcript_pdf))
+  ) {
+    throw new Error(
+      "transcript_pdf must be an object mapping languages to PDF paths",
+    );
+  }
+
+  const sources = new Map();
+  for (const [lang, on] of Object.entries(video.download_vtt ?? {})) {
+    if (!on) continue;
+    sources.set(lang, { downloadVtt: true, pdf: null });
+  }
+  for (const [lang, path] of Object.entries(video.transcript_pdf ?? {})) {
+    if (path === undefined || path === null || path === false) continue;
+    if (typeof path !== "string" || !path.trim()) {
+      throw new Error(`transcript_pdf.${lang} must be a non-empty path`);
+    }
+    const current = sources.get(lang) ?? { downloadVtt: false, pdf: null };
+    sources.set(lang, { ...current, pdf: path.trim() });
+  }
+  return sources;
+}
+
+function wantsMarkdown(video, lang) {
+  const marker = video.generate_markdown;
+  if (marker === true) return true;
+  if (marker && typeof marker === "object") return Boolean(marker[lang]);
+  return false;
+}
+
 export function videoJobs(video, dir = DEFAULT_DIR, folderSlug = null) {
   if (
     video.dialogue !== undefined &&
@@ -124,17 +159,15 @@ export function videoJobs(video, dir = DEFAULT_DIR, folderSlug = null) {
   }
 
   const folder = assertFolderSlug(folderSlug);
-  const langs = Object.entries(video.download_vtt ?? {})
-    .filter(([, on]) => on)
-    .map(([lang]) => lang);
-  if (langs.length === 0 || !video.url) return [];
+  const sources = transcriptSources(video);
+  if (sources.size === 0 || !video.url) return [];
 
   const slug = slugify(primaryTitle(video));
   if (!slug) return [];
 
   const prefix = Number.isInteger(video.index) ? `${video.index}-` : "";
 
-  return langs.map((lang) => {
+  return [...sources].map(([lang, { downloadVtt, pdf }]) => {
     const name = `${prefix}${video.date}_${slug}.${lang}`;
     const base = folder ? join(dir, folder, name) : join(dir, name);
     return {
@@ -144,6 +177,10 @@ export function videoJobs(video, dir = DEFAULT_DIR, folderSlug = null) {
       titles: video.title,
       dialogue: video.dialogue,
       speakers: video.speakers,
+      source: pdf ? "pdf" : "vtt",
+      pdf,
+      downloadVtt,
+      generate: wantsMarkdown(video, lang),
       base,
       vtt: `${base}.vtt`,
       marker: `${base}.vtt.missing`,
