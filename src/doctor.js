@@ -185,6 +185,7 @@ function render(rows) {
 
 export async function runDoctor({
   configPath = "youtube_to_markdown.yaml",
+  contentsPath,
   overrides = {},
   llm = true,
   timeoutMs = 30000,
@@ -197,7 +198,8 @@ export async function runDoctor({
   }
 
   const { key, source } = resolveApiKey(overrides, config);
-  const dir = resolve(dirname(configPath), config?.contents_path ?? "contents");
+  const contentsValue = contentsPath ?? config?.contents_path ?? "contents";
+  const dir = resolve(dirname(configPath), contentsValue);
 
   const rows = [
     { label: "node", ...checkNode() },
@@ -206,7 +208,7 @@ export async function runDoctor({
   rows.push({ label: "config", ...configRow });
   rows.push({
     label: "contents",
-    value: config?.contents_path ?? "contents",
+    value: contentsValue,
     ...(await checkContents(dir)),
   });
   rows.push({

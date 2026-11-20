@@ -4,7 +4,12 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { loadConfig, loadEnv, settingsFromConfig } from "./config.js";
+import {
+  loadConfig,
+  loadEnv,
+  resolveContentsDir,
+  settingsFromConfig,
+} from "./config.js";
 import { runExtract } from "./extract-video-metadata.js";
 import { runDownloadVtt } from "./download-vtt.js";
 import { runGenerateMarkdown } from "./generate-markdown.js";
@@ -50,7 +55,11 @@ const project = (argv) => {
     if (argv[key] !== undefined) settings[key] = argv[key];
   }
   const configDir = dirname(resolve(argv.config));
-  const dir = resolve(configDir, yaml.contents_path ?? "contents");
+  const dir = resolveContentsDir({
+    configDir,
+    override: argv.contentsPath,
+    config: yaml,
+  });
   return {
     path: argv.config,
     config: yaml,
@@ -66,6 +75,12 @@ const cli = yargs(hideBin(process.argv))
   .usage("youtube-to-markdown <command>")
   .config(loadEnv())
   .option("config", config)
+  .option("contents-path", {
+    describe:
+      "Directory that holds the transcripts and generated Markdown " +
+      "(default: contents_path in the configuration, then contents)",
+    type: "string",
+  })
   .command(
     "extract-video-metadata",
     "Fetch the videos of each feed source (channel or playlist) from YouTube into the configuration file",
@@ -302,6 +317,7 @@ const cli = yargs(hideBin(process.argv))
     handle(async (argv) => {
       await runDoctor({
         configPath: argv.config,
+        contentsPath: argv.contentsPath,
         overrides: {
           model: argv.model,
           endpoint: argv.endpoint,

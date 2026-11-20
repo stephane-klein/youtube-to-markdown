@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { parse } from "yaml";
 
 export function loadConfig(path) {
@@ -39,7 +40,12 @@ const ENV = {
   chunkTargetTokens: "YT_TO_MD_CHUNK_TARGET_TOKENS",
   reasoning: "YT_TO_MD_REASONING",
   debugLlm: "YT_TO_MD_DEBUG_LLM",
+  contentsPath: "YT_TO_MD_CONTENTS_PATH",
 };
+
+export function resolveContentsDir({ configDir, override, config = {} }) {
+  return resolve(configDir, override ?? config.contents_path ?? "contents");
+}
 
 export function loadEnv(env = process.env) {
   return Object.fromEntries(

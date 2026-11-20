@@ -187,9 +187,9 @@ variables, then the settings written in the YAML file, then the built-in
 defaults. The API key stays a secret: `--api-key` or `OPENAI_API_KEY`. The
 settings are `x_opencode_session`, `model_id`, `openaiapi_endpoint`,
 `concurrency` and `ytdlp_concurrency` (plus the optional `api_key`,
-`retry_delays`, `max_output_tokens`, `chunk_target_tokens` and `reasoning`). I
-only set the source URLs, and the `extract-video-metadata` command fills the
-rest:
+`retry_delays`, `max_output_tokens`, `chunk_target_tokens`, `reasoning` and
+`contents_path`). I only set the source URLs, and the `extract-video-metadata`
+command fills the rest:
 
 `x_opencode_session` is the base of the `X-OpenCode-Session` header; it is
 optional and specific to OpenCode. A stable per-video suffix is appended to it,
@@ -220,11 +220,12 @@ feed:
 ```
 
 `contents_path` (optional) chooses the directory that holds the transcripts and
-the generated Markdown. It accepts an absolute path or a path relative to the
-directory of `youtube_to_markdown.yaml`; it defaults to `contents`. Unlike the
-other settings, it can only be set in the YAML file — there is no flag or
-environment variable for it. `.gitignore` only ignores the default `contents/`,
-so add your own path there if you move it.
+the generated Markdown. It defaults to `contents`. You can set it in the YAML
+file, with `YT_TO_MD_CONTENTS_PATH`, or with `--contents-path`; like the other
+settings, the flag wins over the environment variable, which wins over the YAML
+file. A relative path is always resolved against the directory of
+`youtube_to_markdown.yaml`, whichever way you set it. `.gitignore` only ignores
+the default `contents/`, so add your own path there if you move it.
 
 `folder_slug` (optional, on a feed entry) stores that source's transcripts and
 Markdown in a subdirectory of `contents_path`, for example `science-4-all`.
